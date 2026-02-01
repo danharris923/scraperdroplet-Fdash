@@ -158,9 +158,9 @@ export default function ServerPage() {
 
             {/* Resource Gauges */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <GaugeCard title="CPU Usage" value={Math.round(health.cpu_percent)} icon={Cpu} color="cyan" detail="Processing power utilization" />
-              <GaugeCard title="Memory Usage" value={Math.round(health.memory_percent)} icon={Database} color="purple" detail="RAM consumption" />
-              <GaugeCard title="Disk Usage" value={Math.round(health.disk_percent)} icon={HardDrive} color="amber" detail={`${health.disk_used_gb.toFixed(1)} GB / ${health.disk_total_gb.toFixed(0)} GB`} />
+              <GaugeCard title="CPU Usage" value={Math.round(health.cpu_percent ?? 0)} icon={Cpu} color="cyan" detail="Processing power utilization" />
+              <GaugeCard title="Memory Usage" value={Math.round(health.memory_percent ?? 0)} icon={Database} color="purple" detail="RAM consumption" />
+              <GaugeCard title="Disk Usage" value={Math.round(health.disk_percent ?? 0)} icon={HardDrive} color="amber" detail={`${(health.disk_used_gb ?? 0).toFixed(1)} GB / ${(health.disk_total_gb ?? 0).toFixed(0)} GB`} />
             </div>
 
             {/* Detailed Stats */}
@@ -177,15 +177,15 @@ export default function ServerPage() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-400">Used</span>
-                      <span className="text-slate-200">{health.disk_used_gb.toFixed(2)} GB</span>
+                      <span className="text-slate-200">{(health.disk_used_gb ?? 0).toFixed(2)} GB</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-400">Total</span>
-                      <span className="text-slate-200">{health.disk_total_gb.toFixed(2)} GB</span>
+                      <span className="text-slate-200">{(health.disk_total_gb ?? 0).toFixed(2)} GB</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-400">Free</span>
-                      <span className="text-green-400">{(health.disk_total_gb - health.disk_used_gb).toFixed(2)} GB</span>
+                      <span className="text-green-400">{((health.disk_total_gb ?? 0) - (health.disk_used_gb ?? 0)).toFixed(2)} GB</span>
                     </div>
                   </div>
                   <div className="h-3 bg-slate-800 rounded-full overflow-hidden">
@@ -247,11 +247,11 @@ export default function ServerPage() {
                   </div>
                   <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
                     <div className="text-xs text-slate-500 mb-1">CPU Load</div>
-                    <div className="text-lg font-mono text-cyan-400">{health.cpu_percent.toFixed(1)}%</div>
+                    <div className="text-lg font-mono text-cyan-400">{(health.cpu_percent ?? 0).toFixed(1)}%</div>
                   </div>
                   <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
                     <div className="text-xs text-slate-500 mb-1">Memory Load</div>
-                    <div className="text-lg font-mono text-purple-400">{health.memory_percent.toFixed(1)}%</div>
+                    <div className="text-lg font-mono text-purple-400">{(health.memory_percent ?? 0).toFixed(1)}%</div>
                   </div>
                 </div>
               </CardContent>
