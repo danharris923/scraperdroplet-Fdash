@@ -39,11 +39,17 @@ function formatUptime(seconds: number): string {
   return `${days}d ${hours}h ${minutes}m ${secs}s`
 }
 
+const colorStyles: Record<string, { bg: string; text: string; ring: string; stroke: string }> = {
+  cyan: { bg: 'from-cyan-500 to-cyan-400', text: 'text-cyan-400', ring: 'ring-cyan-500/30', stroke: 'text-cyan-500' },
+  purple: { bg: 'from-purple-500 to-purple-400', text: 'text-purple-400', ring: 'ring-purple-500/30', stroke: 'text-purple-500' },
+  amber: { bg: 'from-amber-500 to-amber-400', text: 'text-amber-400', ring: 'ring-amber-500/30', stroke: 'text-amber-500' },
+}
+
 function GaugeCard({ title, value, icon: Icon, color, detail }: { title: string; value: number; icon: any; color: string; detail?: string }) {
   const getStatusColor = (val: number) => {
-    if (val >= 90) return { bg: 'from-red-500 to-red-400', text: 'text-red-400', ring: 'ring-red-500/30' }
-    if (val >= 70) return { bg: 'from-amber-500 to-yellow-500', text: 'text-amber-400', ring: 'ring-amber-500/30' }
-    return { bg: `from-${color}-500 to-${color}-400`, text: `text-${color}-400`, ring: `ring-${color}-500/30` }
+    if (val >= 90) return { bg: 'from-red-500 to-red-400', text: 'text-red-400', ring: 'ring-red-500/30', stroke: 'text-red-500' }
+    if (val >= 70) return { bg: 'from-amber-500 to-yellow-500', text: 'text-amber-400', ring: 'ring-amber-500/30', stroke: 'text-amber-500' }
+    return colorStyles[color] || colorStyles.cyan
   }
 
   const status = getStatusColor(value)
@@ -69,7 +75,7 @@ function GaugeCard({ title, value, icon: Icon, color, detail }: { title: string;
                 <circle
                   cx="50" cy="50" r="45" fill="none" strokeWidth="8"
                   strokeLinecap="round"
-                  className={value >= 90 ? 'text-red-500' : value >= 70 ? 'text-amber-500' : `text-${color}-500`}
+                  className={status.stroke}
                   strokeDasharray={`${value * 2.83} 283`}
                 />
               </svg>

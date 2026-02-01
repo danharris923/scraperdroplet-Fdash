@@ -545,10 +545,14 @@ export default function Dashboard() {
                 <CardHeader className="pb-2"><CardTitle className="text-slate-100 text-base">Resource Usage</CardTitle></CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {[{ label: 'CPU', value: health?.cpu_percent ?? 0, color: 'cyan' }, { label: 'Memory', value: health?.memory_percent ?? 0, color: 'purple' }, { label: 'Disk', value: health?.disk_percent ?? 0, color: 'amber' }].map(r => (
+                    {[
+                      { label: 'CPU', value: health?.cpu_percent ?? 0, textColor: 'text-cyan-400', gradient: 'from-cyan-500 to-cyan-400' },
+                      { label: 'Memory', value: health?.memory_percent ?? 0, textColor: 'text-purple-400', gradient: 'from-purple-500 to-purple-400' },
+                      { label: 'Disk', value: health?.disk_percent ?? 0, textColor: 'text-amber-400', gradient: 'from-amber-500 to-amber-400' }
+                    ].map(r => (
                       <div key={r.label}>
-                        <div className="flex items-center justify-between mb-1"><div className="text-sm text-slate-400">{r.label}</div><div className={`text-xs ${r.value > 80 ? 'text-red-400' : `text-${r.color}-400`}`}>{r.value}%</div></div>
-                        <div className="h-2 bg-slate-800 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all duration-500 ${r.value > 80 ? 'bg-gradient-to-r from-red-500 to-red-400' : `bg-gradient-to-r from-${r.color}-500 to-${r.color}-400`}`} style={{ width: `${r.value}%` }}></div></div>
+                        <div className="flex items-center justify-between mb-1"><div className="text-sm text-slate-400">{r.label}</div><div className={`text-xs ${r.value > 80 ? 'text-red-400' : r.textColor}`}>{r.value}%</div></div>
+                        <div className="h-2 bg-slate-800 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all duration-500 bg-gradient-to-r ${r.value > 80 ? 'from-red-500 to-red-400' : r.gradient}`} style={{ width: `${r.value}%` }}></div></div>
                       </div>
                     ))}
                   </div>
