@@ -49,6 +49,15 @@ export interface PricePoint {
   is_on_sale: boolean
 }
 
+export interface CostcoDanPost {
+  id: string
+  title: string
+  image_url: string
+  posted_at: string | null
+  facebook_url: string | null
+  viral_score: number
+}
+
 export interface ProductFilters {
   sources: string[]
   stores: string[]
@@ -70,11 +79,19 @@ export interface DashboardStats {
   errorCount: number
 }
 
+export interface ProductStats {
+  total: number
+  active: number
+  newToday: number
+  onSale: number
+}
+
 export interface ProductsResponse {
   products: Product[]
   total: number
   page: number
   limit: number
+  stats?: ProductStats
 }
 
 export interface ProductDetail extends Product {
