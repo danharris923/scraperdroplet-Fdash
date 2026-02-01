@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -12,41 +12,28 @@ import {
   Search,
   ShoppingBag,
   Filter,
-  Grid3X3,
-  List,
   ExternalLink,
   TrendingDown,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useProducts } from "@/hooks/useProducts"
 import type { Product } from "@/types"
 
-// Mock product data
-const mockProducts: Product[] = [
-  { id: '1', title: 'Sony WH-1000XM5 Wireless Headphones', brand: 'Sony', store: 'Amazon', source: 'amazon_ca', image_url: '/placeholder.svg', current_price: 329.99, original_price: 449.99, discount_percent: 27, category: 'Electronics', region: 'CA', affiliate_url: '#', is_active: true, first_seen_at: '2024-01-15', last_seen_at: '2024-01-20' },
-  { id: '2', title: 'Sony WH-1000XM4 Wireless Noise Cancelling', brand: 'Sony', store: 'Best Buy', source: 'shopify', image_url: '/placeholder.svg', current_price: 248.00, original_price: 349.99, discount_percent: 29, category: 'Electronics', region: 'CA', affiliate_url: '#', is_active: true, first_seen_at: '2024-01-10', last_seen_at: '2024-01-20' },
-  { id: '3', title: 'Bose QuietComfort 45 Headphones', brand: 'Bose', store: 'Amazon', source: 'amazon_ca', image_url: '/placeholder.svg', current_price: 279.99, original_price: 449.99, discount_percent: 38, category: 'Electronics', region: 'CA', affiliate_url: '#', is_active: true, first_seen_at: '2024-01-12', last_seen_at: '2024-01-20' },
-  { id: '4', title: 'Apple AirPods Pro 2nd Generation', brand: 'Apple', store: 'Costco', source: 'api', image_url: '/placeholder.svg', current_price: 299.99, original_price: 329.99, discount_percent: 9, category: 'Electronics', region: 'CA', affiliate_url: '#', is_active: true, first_seen_at: '2024-01-18', last_seen_at: '2024-01-20' },
-  { id: '5', title: 'Samsung Galaxy Buds2 Pro', brand: 'Samsung', store: 'Amazon', source: 'amazon_ca', image_url: '/placeholder.svg', current_price: 159.99, original_price: 289.99, discount_percent: 45, category: 'Electronics', region: 'CA', affiliate_url: '#', is_active: true, first_seen_at: '2024-01-08', last_seen_at: '2024-01-20' },
-  { id: '6', title: 'Nintendo Switch OLED Model', brand: 'Nintendo', store: 'Walmart', source: 'browser', image_url: '/placeholder.svg', current_price: 399.99, original_price: 449.99, discount_percent: 11, category: 'Gaming', region: 'CA', affiliate_url: '#', is_active: true, first_seen_at: '2024-01-05', last_seen_at: '2024-01-20' },
-  { id: '7', title: 'PlayStation 5 Console', brand: 'Sony', store: 'Best Buy', source: 'browser', image_url: '/placeholder.svg', current_price: 579.99, original_price: 629.99, discount_percent: 8, category: 'Gaming', region: 'CA', affiliate_url: '#', is_active: true, first_seen_at: '2024-01-02', last_seen_at: '2024-01-20' },
-  { id: '8', title: 'Xbox Series X Console', brand: 'Microsoft', store: 'Amazon', source: 'amazon_ca', image_url: '/placeholder.svg', current_price: 549.99, original_price: 599.99, discount_percent: 8, category: 'Gaming', region: 'CA', affiliate_url: '#', is_active: true, first_seen_at: '2024-01-03', last_seen_at: '2024-01-20' },
-  { id: '9', title: 'Dyson V15 Detect Vacuum', brand: 'Dyson', store: 'Dyson', source: 'shopify', image_url: '/placeholder.svg', current_price: 749.99, original_price: 949.99, discount_percent: 21, category: 'Home', region: 'CA', affiliate_url: '#', is_active: true, first_seen_at: '2024-01-14', last_seen_at: '2024-01-20' },
-  { id: '10', title: 'Dyson V12 Detect Slim Vacuum', brand: 'Dyson', store: 'Amazon', source: 'amazon_ca', image_url: '/placeholder.svg', current_price: 599.99, original_price: 799.99, discount_percent: 25, category: 'Home', region: 'CA', affiliate_url: '#', is_active: true, first_seen_at: '2024-01-16', last_seen_at: '2024-01-20' },
-  { id: '11', title: 'LG C3 55" OLED TV', brand: 'LG', store: 'Best Buy', source: 'browser', image_url: '/placeholder.svg', current_price: 1299.99, original_price: 1799.99, discount_percent: 28, category: 'Electronics', region: 'CA', affiliate_url: '#', is_active: true, first_seen_at: '2024-01-11', last_seen_at: '2024-01-20' },
-  { id: '12', title: 'Samsung 65" Neo QLED 4K TV', brand: 'Samsung', store: 'Amazon', source: 'amazon_ca', image_url: '/placeholder.svg', current_price: 1499.99, original_price: 2199.99, discount_percent: 32, category: 'Electronics', region: 'CA', affiliate_url: '#', is_active: true, first_seen_at: '2024-01-09', last_seen_at: '2024-01-20' },
-]
-
-const sources = ['amazon_ca', 'shopify', 'browser', 'api', 'rss']
-const categories = ['Electronics', 'Gaming', 'Home']
+const sources = ['deals', 'Flipp', 'retailer']
 
 function ProductCard({ product }: { product: Product }) {
   return (
     <Card className="bg-slate-900/50 border-slate-700/50 backdrop-blur-sm group hover:border-cyan-500/30 transition-all">
       <CardContent className="p-4">
         <div className="aspect-square bg-slate-800/50 rounded-lg mb-3 flex items-center justify-center overflow-hidden relative">
-          <ShoppingBag className="h-12 w-12 text-slate-600" />
+          {product.image_url ? (
+            <img src={product.image_url} alt={product.title} className="w-full h-full object-cover" />
+          ) : (
+            <ShoppingBag className="h-12 w-12 text-slate-600" />
+          )}
           {(product.discount_percent ?? 0) > 0 && (
             <Badge className={`absolute top-2 right-2 ${(product.discount_percent ?? 0) >= 30 ? 'bg-red-500/90 text-white' : 'bg-amber-500/90 text-white'}`}>
               -{product.discount_percent}%
@@ -60,15 +47,17 @@ function ProductCard({ product }: { product: Product }) {
           <div className="text-xs text-slate-500">{product.store}</div>
           <h3 className="text-sm font-medium text-slate-200 line-clamp-2 min-h-[2.5rem]">{product.title}</h3>
           <div className="flex items-baseline gap-2">
-            <span className="text-lg font-bold text-cyan-400">${product.current_price?.toFixed(2)}</span>
+            <span className="text-lg font-bold text-cyan-400">${(product.current_price ?? 0).toFixed(2)}</span>
             {product.original_price && product.original_price > (product.current_price ?? 0) && (
-              <span className="text-sm text-slate-500 line-through">${product.original_price?.toFixed(2)}</span>
+              <span className="text-sm text-slate-500 line-through">${(product.original_price ?? 0).toFixed(2)}</span>
             )}
           </div>
-          <Button size="sm" variant="outline" className="w-full mt-2 bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/50 opacity-0 group-hover:opacity-100 transition-opacity">
-            <ExternalLink className="h-3 w-3 mr-2" />
-            View Deal
-          </Button>
+          <a href={product.affiliate_url} target="_blank" rel="noopener noreferrer">
+            <Button size="sm" variant="outline" className="w-full mt-2 bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/50">
+              <ExternalLink className="h-3 w-3 mr-2" />
+              View Deal
+            </Button>
+          </a>
         </div>
       </CardContent>
     </Card>
@@ -79,51 +68,27 @@ export default function ProductsPage() {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedSources, setSelectedSources] = useState<string[]>([])
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [minDiscount, setMinDiscount] = useState<number | null>(null)
   const [page, setPage] = useState(1)
-  const itemsPerPage = 8
+  const itemsPerPage = 24
 
-  const filteredProducts = useMemo(() => {
-    let filtered = mockProducts
+  const { data, isLoading, error } = useProducts({
+    search: searchQuery,
+    sources: selectedSources,
+    minDiscount,
+    page,
+    limit: itemsPerPage,
+    sortBy: 'discount_percent',
+    sortOrder: 'desc',
+  })
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(p =>
-        p.title.toLowerCase().includes(query) ||
-        p.brand?.toLowerCase().includes(query) ||
-        p.store.toLowerCase().includes(query)
-      )
-    }
-
-    if (selectedSources.length > 0) {
-      filtered = filtered.filter(p => selectedSources.includes(p.source))
-    }
-
-    if (selectedCategories.length > 0) {
-      filtered = filtered.filter(p => p.category && selectedCategories.includes(p.category))
-    }
-
-    if (minDiscount) {
-      filtered = filtered.filter(p => (p.discount_percent ?? 0) >= minDiscount)
-    }
-
-    return filtered
-  }, [searchQuery, selectedSources, selectedCategories, minDiscount])
-
-  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage)
-  const paginatedProducts = filteredProducts.slice((page - 1) * itemsPerPage, page * itemsPerPage)
+  const products = data?.products || []
+  const total = data?.total || 0
+  const totalPages = Math.ceil(total / itemsPerPage)
 
   const toggleSource = (source: string) => {
     setSelectedSources(prev =>
       prev.includes(source) ? prev.filter(s => s !== source) : [...prev, source]
-    )
-    setPage(1)
-  }
-
-  const toggleCategory = (category: string) => {
-    setSelectedCategories(prev =>
-      prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]
     )
     setPage(1)
   }
@@ -188,24 +153,6 @@ export default function ProductsPage() {
                   </div>
                 </div>
 
-                {/* Categories */}
-                <div className="space-y-2">
-                  <Label className="text-sm text-slate-400">Categories</Label>
-                  <div className="space-y-2">
-                    {categories.map(category => (
-                      <div key={category} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={category}
-                          checked={selectedCategories.includes(category)}
-                          onCheckedChange={() => toggleCategory(category)}
-                          className="border-slate-600 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
-                        />
-                        <Label htmlFor={category} className="text-sm text-slate-300 cursor-pointer">{category}</Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Min Discount */}
                 <div className="space-y-2">
                   <Label className="text-sm text-slate-400">Minimum Discount</Label>
@@ -228,13 +175,12 @@ export default function ProductsPage() {
                 </div>
 
                 {/* Clear Filters */}
-                {(selectedSources.length > 0 || selectedCategories.length > 0 || minDiscount || searchQuery) && (
+                {(selectedSources.length > 0 || minDiscount || searchQuery) && (
                   <Button
                     variant="outline"
                     className="w-full bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-slate-100"
                     onClick={() => {
                       setSelectedSources([])
-                      setSelectedCategories([])
                       setMinDiscount(null)
                       setSearchQuery("")
                       setPage(1)
@@ -252,7 +198,7 @@ export default function ProductsPage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="bg-slate-800/50 text-slate-400 border-slate-600/50">
-                  {filteredProducts.length} products
+                  {total} products
                 </Badge>
                 {minDiscount && (
                   <Badge className="bg-green-500/20 text-green-400 border-green-500/50">
@@ -263,10 +209,20 @@ export default function ProductsPage() {
               </div>
             </div>
 
-            {paginatedProducts.length > 0 ? (
+            {isLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
+              </div>
+            ) : error ? (
+              <Card className="bg-red-500/10 border-red-500/50">
+                <CardContent className="p-6 text-center text-red-400">
+                  Failed to load products. Please try again later.
+                </CardContent>
+              </Card>
+            ) : products.length > 0 ? (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {paginatedProducts.map(product => (
+                  {products.map(product => (
                     <ProductCard key={product.id} product={product} />
                   ))}
                 </div>
@@ -284,20 +240,32 @@ export default function ProductsPage() {
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
                     <div className="flex items-center gap-1">
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                        <Button
-                          key={p}
-                          variant={p === page ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setPage(p)}
-                          className={p === page
-                            ? "bg-cyan-500 text-white"
-                            : "bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-slate-100"
-                          }
-                        >
-                          {p}
-                        </Button>
-                      ))}
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum
+                        if (totalPages <= 5) {
+                          pageNum = i + 1
+                        } else if (page <= 3) {
+                          pageNum = i + 1
+                        } else if (page >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i
+                        } else {
+                          pageNum = page - 2 + i
+                        }
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={pageNum === page ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setPage(pageNum)}
+                            className={pageNum === page
+                              ? "bg-cyan-500 text-white"
+                              : "bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-slate-100"
+                            }
+                          >
+                            {pageNum}
+                          </Button>
+                        )
+                      })}
                     </div>
                     <Button
                       variant="outline"
