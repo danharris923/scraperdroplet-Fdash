@@ -269,10 +269,11 @@ function ActionButton({ icon: Icon, label, onClick }: { icon: LucideIcon; label:
 export default function Dashboard() {
   const router = useRouter()
   const [theme, setTheme] = useState<"dark" | "light">("dark")
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const [currentTime, setCurrentTime] = useState<Date | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [triggeringScrapers, setTriggeringScrapers] = useState<Set<string>>(new Set())
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [isMounted, setIsMounted] = useState(false)
 
   const { data: scrapers, isLoading: scrapersLoading, error: scrapersError } = useScrapers()
   const { data: health } = useSystemHealth()
@@ -293,8 +294,8 @@ export default function Dashboard() {
     finally { setTriggeringScrapers(prev => { const n = new Set(prev); n.delete(scraperName); return n }) }
   }
 
-  useEffect(() => { const t = setTimeout(() => setIsLoading(false), 1500); return () => clearTimeout(t) }, [])
-  useEffect(() => { const i = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(i) }, [])
+  useEffect(() => { setIsMounted(true); const t = setTimeout(() => setIsLoading(false), 1500); return () => clearTimeout(t) }, [])
+  useEffect(() => { setCurrentTime(new Date()); const i = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(i) }, [])
 
   // Particle effect
   useEffect(() => {
@@ -325,8 +326,8 @@ export default function Dashboard() {
     return () => window.removeEventListener("resize", handleResize)
   }, [])
 
-  const formatTime = (d: Date) => d.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })
-  const formatDate = (d: Date) => d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+  const formatTime = (d: Date | null) => d ? d.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "--:--:--"
+  const formatDate = (d: Date | null) => d ? d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "Loading..."
   const navigateTo = (path: string) => router.push(path)
 
   return (
