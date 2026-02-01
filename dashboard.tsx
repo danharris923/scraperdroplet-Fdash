@@ -523,8 +523,8 @@ export default function Dashboard() {
                   </div>
                   <div className="p-4">
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-slate-800/50 rounded-md p-3 border border-slate-700/50"><div className="text-xs text-slate-500 mb-1">Uptime</div><div className="text-sm font-mono text-slate-200">{health ? formatUptime(health.uptime_seconds) : 'N/A'}</div></div>
-                      <div className="bg-slate-800/50 rounded-md p-3 border border-slate-700/50"><div className="text-xs text-slate-500 mb-1">Disk</div><div className="text-sm font-mono text-slate-200">{health ? `${health.disk_used_gb.toFixed(1)}/${health.disk_total_gb.toFixed(0)}GB` : 'N/A'}</div></div>
+                      <div className="bg-slate-800/50 rounded-md p-3 border border-slate-700/50"><div className="text-xs text-slate-500 mb-1">Uptime</div><div className="text-sm font-mono text-slate-200">{health?.uptime_seconds != null ? formatUptime(health.uptime_seconds) : 'N/A'}</div></div>
+                      <div className="bg-slate-800/50 rounded-md p-3 border border-slate-700/50"><div className="text-xs text-slate-500 mb-1">Disk</div><div className="text-sm font-mono text-slate-200">{health?.disk_used_gb != null && health?.disk_total_gb != null ? `${health.disk_used_gb.toFixed(1)}/${health.disk_total_gb.toFixed(0)}GB` : 'N/A'}</div></div>
                     </div>
                   </div>
                 </CardContent>
