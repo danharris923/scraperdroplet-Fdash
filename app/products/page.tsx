@@ -62,7 +62,7 @@ function ProductCard({ product }: { product: Product }) {
           <div className="flex items-baseline gap-2">
             <span className="text-lg font-bold text-cyan-400">${product.current_price?.toFixed(2)}</span>
             {product.original_price && product.original_price > (product.current_price ?? 0) && (
-              <span className="text-sm text-slate-500 line-through">${product.original_price.toFixed(2)}</span>
+              <span className="text-sm text-slate-500 line-through">${product.original_price?.toFixed(2)}</span>
             )}
           </div>
           <Button size="sm" variant="outline" className="w-full mt-2 bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/50 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -60,7 +60,7 @@ function ProductCard({ product, onSelect, isSelected }: { product: Product; onSe
           <div className="flex items-baseline gap-2">
             <span className="text-lg font-bold text-cyan-400">${product.current_price?.toFixed(2)}</span>
             {product.original_price && product.original_price > (product.current_price ?? 0) && (
-              <span className="text-sm text-slate-500 line-through">${product.original_price.toFixed(2)}</span>
+              <span className="text-sm text-slate-500 line-through">${product.original_price?.toFixed(2)}</span>
             )}
           </div>
         </div>
