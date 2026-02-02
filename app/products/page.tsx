@@ -557,8 +557,20 @@ function ProductCard({ product, onClick }: { product: Product; onClick: () => vo
   )
 }
 
+// Applied filters type - only these are sent to the API
+interface AppliedFilters {
+  search: string
+  sources: string[]
+  stores: string[]
+  regions: string[]
+  minDiscount: number | null
+  priceRange: string | null
+  sortBy: string
+}
+
 export default function ProductsPage() {
   const router = useRouter()
+  // Pending filter states (UI state, not yet applied)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedSources, setSelectedSources] = useState<string[]>([])
   const [selectedStores, setSelectedStores] = useState<string[]>([])
@@ -573,6 +585,9 @@ export default function ProductsPage() {
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null)
   const [filterLoading, setFilterLoading] = useState(true)
   const itemsPerPage = 24
+
+  // Applied filters - only updated when "Apply Filters" is clicked
+  const [appliedFilters, setAppliedFilters] = useState<AppliedFilters | null>(null)
 
   // Fetch filter options from API
   useEffect(() => {
@@ -590,9 +605,10 @@ export default function ProductsPage() {
     fetchFilterOptions()
   }, [])
 
-  // Parse sort option into sortBy and sortOrder
+  // Parse sort option into sortBy and sortOrder (uses applied filters)
   const getSortParams = () => {
-    switch (sortBy) {
+    const sort = appliedFilters?.sortBy || 'newest'
+    switch (sort) {
       case 'price_asc': return { sortBy: 'current_price' as const, sortOrder: 'asc' as const }
       case 'price_desc': return { sortBy: 'current_price' as const, sortOrder: 'desc' as const }
       case 'newest': return { sortBy: 'first_seen_at' as const, sortOrder: 'desc' as const }
@@ -600,19 +616,44 @@ export default function ProductsPage() {
     }
   }
 
-  // Parse price range into min/max
+  // Parse price range into min/max (uses applied filters)
   const getPriceParams = () => {
-    if (!priceRange) return {}
-    const range = PRICE_RANGES.find(r => r.value === priceRange)
+    const pr = appliedFilters?.priceRange
+    if (!pr) return {}
+    const range = PRICE_RANGES.find(r => r.value === pr)
     if (!range) return {}
     return { minPrice: range.min, maxPrice: range.max ?? undefined }
   }
 
+  // Apply current filters - this triggers the API call
+  const applyFilters = () => {
+    setAppliedFilters({
+      search: searchQuery,
+      sources: selectedSources,
+      stores: selectedStores,
+      regions: selectedRegions,
+      minDiscount,
+      priceRange,
+      sortBy,
+    })
+    setPage(1)
+  }
+
+  // Check if pending filters differ from applied filters
+  const hasPendingChanges = appliedFilters ? (
+    searchQuery !== appliedFilters.search ||
+    JSON.stringify(selectedSources) !== JSON.stringify(appliedFilters.sources) ||
+    JSON.stringify(selectedRegions) !== JSON.stringify(appliedFilters.regions) ||
+    minDiscount !== appliedFilters.minDiscount ||
+    priceRange !== appliedFilters.priceRange ||
+    sortBy !== appliedFilters.sortBy
+  ) : (selectedSources.length > 0 || searchQuery || minDiscount !== null)
+
   const { data, isLoading, error } = useProducts({
-    search: searchQuery,
-    sources: selectedSources,
-    regions: selectedRegions,
-    minDiscount,
+    search: appliedFilters?.search || '',
+    sources: appliedFilters?.sources || [],
+    regions: appliedFilters?.regions || [],
+    minDiscount: appliedFilters?.minDiscount ?? null,
     ...getPriceParams(),
     page,
     limit: itemsPerPage,
@@ -628,31 +669,26 @@ export default function ProductsPage() {
     setSelectedSources(prev =>
       prev.includes(source) ? prev.filter(s => s !== source) : [...prev, source]
     )
-    setPage(1)
   }
 
   const toggleStore = (store: string) => {
     setSelectedStores(prev =>
       prev.includes(store) ? prev.filter(s => s !== store) : [...prev, store]
     )
-    setPage(1)
   }
 
   const toggleRegion = (region: string) => {
     setSelectedRegions(prev =>
       prev.includes(region) ? prev.filter(r => r !== region) : [...prev, region]
     )
-    setPage(1)
   }
 
   const toggleDiscount = (value: number) => {
     setMinDiscount(prev => prev === value ? null : value)
-    setPage(1)
   }
 
   const togglePriceRange = (value: string) => {
     setPriceRange(prev => prev === value ? null : value)
-    setPage(1)
   }
 
   const clearAllFilters = () => {
@@ -662,6 +698,7 @@ export default function ProductsPage() {
     setMinDiscount(null)
     setPriceRange(null)
     setSearchQuery("")
+    setAppliedFilters(null)
     setPage(1)
   }
 
@@ -721,17 +758,32 @@ export default function ProductsPage() {
               </CardHeader>
               <CardContent className="space-y-2 pt-2">
                 {/* Search */}
-                <div className="pb-4 border-b border-slate-700/50">
+                <div className="pb-4 border-b border-slate-700/50 space-y-3">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <Input
                       type="text"
                       placeholder="Search products..."
                       value={searchQuery}
-                      onChange={(e) => { setSearchQuery(e.target.value); setPage(1) }}
+                      onChange={(e) => setSearchQuery(e.target.value)}
                       className="pl-9 bg-slate-800/50 border-slate-700/50 text-slate-100 placeholder:text-slate-500"
                     />
                   </div>
+                  {/* Apply Filters Button */}
+                  <Button
+                    onClick={applyFilters}
+                    disabled={!hasPendingChanges}
+                    className={`w-full ${hasPendingChanges
+                      ? 'bg-cyan-500 hover:bg-cyan-600 text-white'
+                      : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}
+                  >
+                    {appliedFilters ? 'Update Results' : 'Apply Filters'}
+                    {hasPendingChanges && (
+                      <Badge className="ml-2 bg-white/20 text-white text-xs">
+                        {activeFilterCount}
+                      </Badge>
+                    )}
+                  </Button>
                 </div>
 
                 {filterLoading ? (
@@ -957,10 +1009,10 @@ export default function ProductsPage() {
               <Card className="bg-slate-900/50 border-slate-700/50">
                 <CardContent className="p-12 text-center">
                   <ShoppingBag className="h-16 w-16 text-slate-600 mx-auto mb-4" />
-                  {selectedSources.length === 0 ? (
+                  {!appliedFilters ? (
                     <>
-                      <p className="text-slate-400 text-lg">Select sources to view products</p>
-                      <p className="text-sm text-slate-500 mt-1">Choose at least one scraper source from the filters</p>
+                      <p className="text-slate-400 text-lg">Select filters and click Apply</p>
+                      <p className="text-sm text-slate-500 mt-1">Choose sources from the sidebar, then click "Apply Filters"</p>
                     </>
                   ) : (
                     <>
