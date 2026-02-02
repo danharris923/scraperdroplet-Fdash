@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
 import type { Product } from '@/types'
 
-export const dynamic = 'force-dynamic'
+// Cache responses for 5 minutes (300 seconds)
+export const revalidate = 300
 
 // All deal tables to query
 const DEAL_TABLES = [
@@ -300,13 +301,17 @@ export async function GET(request: NextRequest) {
       for (const r of cocopriceResult.data) {
         const extraData = r.extra_data || {}
         const region = extraData.region || 'west'
+        const cocoImages = r.images || []
+        const cocoImageUrl = cocoImages.length > 0
+          ? cocoImages[0]
+          : (extraData.image_url || (r.thumbnail_url && !r.thumbnail_url.includes('LogoMobile') ? r.thumbnail_url : null))
         allProducts.push({
           id: `cocoprice_${r.id}`,
           title: r.title || '',
           brand: r.brand || null,
           store: 'Costco',
           source: 'cocopricetracker',
-          image_url: r.thumbnail_url || null,
+          image_url: cocoImageUrl,
           current_price: r.current_price,
           original_price: r.original_price,
           discount_percent: r.sale_percentage || r.discount_percent,
@@ -335,8 +340,9 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Paginate
-    const paginatedProducts = allProducts.slice(0, limit)
+    // Paginate with proper offset calculation
+    const offset = (page - 1) * limit
+    const paginatedProducts = allProducts.slice(offset, offset + limit)
 
     return NextResponse.json({
       products: paginatedProducts,

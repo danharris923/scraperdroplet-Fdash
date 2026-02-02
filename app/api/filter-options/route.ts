@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
 
-export const dynamic = 'force-dynamic'
+// Cache filter options for 15 minutes - they change infrequently
+export const revalidate = 900
 
 export async function GET() {
   try {
