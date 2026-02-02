@@ -109,10 +109,10 @@ function FilterSection({
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
 
   return (
-    <div className="border-b border-slate-700/50 pb-4">
+    <div className="border-b border-slate-700 pb-4">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between w-full py-2 text-left hover:text-cyan-400 transition-colors"
+        className="flex items-center justify-between w-full py-2 text-left hover:text-cyan-400 "
       >
         <span className="text-sm font-medium text-slate-300">{title}</span>
         {isExpanded ? (
@@ -147,7 +147,7 @@ function FilterList({
       {displayedOptions.map((option) => (
         <div
           key={option.value}
-          className="flex items-center space-x-2 py-1 hover:bg-slate-800/30 rounded px-1 -mx-1 cursor-pointer"
+          className="flex items-center space-x-2 py-1 hover:bg-slate-800 rounded px-1 -mx-1 cursor-pointer"
           onClick={() => onToggle(option.value)}
         >
           <Checkbox
@@ -205,7 +205,7 @@ function PriceHistoryChart({ priceHistory }: { priceHistory: ProductDetail['pric
     const point = priceHistory[0]
     return (
       <div className="space-y-2">
-        <div className="h-32 flex items-center justify-center bg-slate-800/30 rounded-lg">
+        <div className="h-32 flex items-center justify-center bg-slate-800 rounded-lg">
           <div className="text-center">
             <div className="text-2xl font-bold text-cyan-400">${point.price.toFixed(2)}</div>
             <div className="text-xs text-slate-500 mt-1">
@@ -226,7 +226,7 @@ function PriceHistoryChart({ priceHistory }: { priceHistory: ProductDetail['pric
 
   return (
     <div className="space-y-2">
-      <div className="h-32 relative bg-slate-800/30 rounded-lg p-2">
+      <div className="h-32 relative bg-slate-800 rounded-lg p-2">
         <svg className="w-full h-full" viewBox={`0 0 ${priceHistory.length * 40} 100`} preserveAspectRatio="none">
           {/* Grid lines */}
           <line x1="0" y1="25" x2={priceHistory.length * 40} y2="25" stroke="#334155" strokeWidth="0.5" strokeDasharray="2" />
@@ -335,7 +335,7 @@ function ProductDetailModal({
             <div className="space-y-6">
               {/* Product Image and Info */}
               <div className="flex gap-4">
-                <div className="w-32 h-32 bg-slate-800/50 rounded-lg flex-shrink-0 overflow-hidden">
+                <div className="w-32 h-32 bg-slate-800 rounded-lg flex-shrink-0 overflow-hidden">
                   {product.image_url ? (
                     <img src={product.image_url} alt={product.title} className="w-full h-full object-cover" />
                   ) : (
@@ -349,7 +349,7 @@ function ProductDetailModal({
                     <Badge variant="outline" className="bg-cyan-500/20 text-cyan-400 border-cyan-500/50">
                       {formatSource(product.source)}
                     </Badge>
-                    <Badge variant="outline" className="bg-slate-800/50 text-slate-300 border-slate-600/50">
+                    <Badge variant="outline" className="bg-slate-800 text-slate-300 border-slate-600/50">
                       {product.store}
                     </Badge>
                     {product.region && (
@@ -384,7 +384,7 @@ function ProductDetailModal({
 
               {/* Product Details */}
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="bg-slate-800/30 rounded-lg p-3">
+                <div className="bg-slate-800 rounded-lg p-3">
                   <div className="text-slate-500 text-xs mb-1">First Seen</div>
                   <div className="text-slate-300">
                     {new Date(product.first_seen_at).toLocaleDateString('en-US', {
@@ -392,7 +392,7 @@ function ProductDetailModal({
                     })}
                   </div>
                 </div>
-                <div className="bg-slate-800/30 rounded-lg p-3">
+                <div className="bg-slate-800 rounded-lg p-3">
                   <div className="text-slate-500 text-xs mb-1">Last Updated</div>
                   <div className="text-slate-300">
                     {new Date(product.last_seen_at).toLocaleDateString('en-US', {
@@ -401,7 +401,7 @@ function ProductDetailModal({
                   </div>
                 </div>
                 {product.description && (
-                  <div className="col-span-2 bg-slate-800/30 rounded-lg p-3">
+                  <div className="col-span-2 bg-slate-800 rounded-lg p-3">
                     <div className="text-slate-500 text-xs mb-1">Details</div>
                     <div className="text-slate-300">{product.description}</div>
                   </div>
@@ -413,7 +413,7 @@ function ProductDetailModal({
                 <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2">
                   <Activity className="h-4 w-4 text-cyan-500" />
                   Price Tracker
-                  <Badge variant="outline" className="bg-slate-800/50 text-slate-400 border-slate-600/50 text-xs">
+                  <Badge variant="outline" className="bg-slate-800 text-slate-400 border-slate-600/50 text-xs">
                     {product.price_history?.length || 1} data point{(product.price_history?.length || 1) !== 1 ? 's' : ''}
                   </Badge>
                 </h4>
@@ -499,11 +499,11 @@ function ProductCard({ product, onClick }: { product: Product; onClick: () => vo
 
   return (
     <Card
-      className="bg-slate-900/50 border-slate-700/50 backdrop-blur-sm group hover:border-cyan-500/30 transition-all cursor-pointer"
+      className="bg-slate-900 border-slate-700 hover:border-cyan-500/50 cursor-pointer"
       onClick={onClick}
     >
       <CardContent className="p-4">
-        <div className="aspect-square bg-slate-800/50 rounded-lg mb-3 flex items-center justify-center overflow-hidden relative">
+        <div className="aspect-square bg-slate-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden relative">
           {product.image_url ? (
             <img src={product.image_url} alt={product.title} className="w-full h-full object-cover" />
           ) : (
@@ -542,7 +542,7 @@ function ProductCard({ product, onClick }: { product: Product; onClick: () => vo
           <Button
             size="sm"
             variant="outline"
-            className="w-full mt-2 bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/50"
+            className="w-full mt-2 bg-slate-800 border-slate-700 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/50"
             onClick={(e) => {
               e.stopPropagation()
               window.open(product.affiliate_url, '_blank', 'noopener,noreferrer')
@@ -706,7 +706,7 @@ export default function ProductsPage() {
   const activeFilterCount = selectedSources.length + selectedStores.length + selectedRegions.length + (minDiscount ? 1 : 0) + (priceRange ? 1 : 0)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black to-slate-800 text-slate-100 p-6">
+    <div className="min-h-screen bg-slate-900 text-slate-100 p-6">
       <div className="container mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
@@ -715,7 +715,7 @@ export default function ProductsPage() {
           </Button>
           <div className="flex items-center gap-2">
             <ShoppingBag className="h-8 w-8 text-cyan-500" />
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+            <h1 className="text-2xl font-bold text-cyan-400">
               Product Catalog
             </h1>
           </div>
@@ -734,7 +734,7 @@ export default function ProductsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Filters Sidebar - Newegg Style */}
           <div className="lg:col-span-1">
-            <Card className="bg-slate-900/50 border-slate-700/50 backdrop-blur-sm sticky top-6">
+            <Card className="bg-slate-900 border-slate-700  sticky top-6">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-slate-100 text-base">
@@ -758,7 +758,7 @@ export default function ProductsPage() {
               </CardHeader>
               <CardContent className="space-y-2 pt-2">
                 {/* Search */}
-                <div className="pb-4 border-b border-slate-700/50 space-y-3">
+                <div className="pb-4 border-b border-slate-700 space-y-3">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <Input
@@ -766,7 +766,7 @@ export default function ProductsPage() {
                       placeholder="Search products..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9 bg-slate-800/50 border-slate-700/50 text-slate-100 placeholder:text-slate-500"
+                      className="pl-9 bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500"
                     />
                   </div>
                   {/* Apply Filters Button */}
@@ -868,7 +868,7 @@ export default function ProductsPage() {
                         {DISCOUNTS.map((discount) => (
                           <div
                             key={discount.value}
-                            className="flex items-center space-x-2 py-1 hover:bg-slate-800/30 rounded px-1 -mx-1 cursor-pointer"
+                            className="flex items-center space-x-2 py-1 hover:bg-slate-800 rounded px-1 -mx-1 cursor-pointer"
                             onClick={() => toggleDiscount(discount.value)}
                           >
                             <Checkbox
@@ -892,7 +892,7 @@ export default function ProductsPage() {
 
                 {/* Database Stats */}
                 {filterOptions?.counts && (
-                  <div className="pt-4 border-t border-slate-700/50">
+                  <div className="pt-4 border-t border-slate-700">
                     <div className="text-xs text-slate-500 space-y-1">
                       <div className="flex justify-between">
                         <span>Total Products:</span>
@@ -919,7 +919,7 @@ export default function ProductsPage() {
           <div className="lg:col-span-3">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="bg-slate-800/50 text-slate-400 border-slate-600/50" title={`${total.toLocaleString()} products`}>
+                <Badge variant="outline" className="bg-slate-800 text-slate-400 border-slate-600/50" title={`${total.toLocaleString()} products`}>
                   {formatLargeNumber(total)} products
                 </Badge>
                 {minDiscount && (
@@ -961,7 +961,7 @@ export default function ProductsPage() {
                       size="icon"
                       onClick={() => setPage(p => Math.max(1, p - 1))}
                       disabled={page === 1}
-                      className="bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-slate-100 disabled:opacity-50"
+                      className="bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-100 disabled:opacity-50"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
@@ -985,7 +985,7 @@ export default function ProductsPage() {
                             onClick={() => setPage(pageNum)}
                             className={pageNum === page
                               ? "bg-cyan-500 text-white"
-                              : "bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-slate-100"
+                              : "bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-100"
                             }
                           >
                             {pageNum}
@@ -998,7 +998,7 @@ export default function ProductsPage() {
                       size="icon"
                       onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                       disabled={page === totalPages}
-                      className="bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-slate-100 disabled:opacity-50"
+                      className="bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-100 disabled:opacity-50"
                     >
                       <ChevronRight className="h-4 w-4" />
                     </Button>
@@ -1006,7 +1006,7 @@ export default function ProductsPage() {
                 )}
               </>
             ) : (
-              <Card className="bg-slate-900/50 border-slate-700/50">
+              <Card className="bg-slate-900 border-slate-700">
                 <CardContent className="p-12 text-center">
                   <ShoppingBag className="h-16 w-16 text-slate-600 mx-auto mb-4" />
                   {!appliedFilters ? (
