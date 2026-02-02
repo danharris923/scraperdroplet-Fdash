@@ -2,7 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
 import type { ProductDetail, PricePoint } from '@/types'
 
-export const dynamic = 'force-dynamic'
+// Cache product details for 5 minutes
+export const revalidate = 300
+
+// All specialty deal tables (same as in main products route)
+const DEAL_TABLES = [
+  'deals',
+  'amazon_ca_deals',
+  'cabelas_ca_deals',
+  'frank_and_oak_deals',
+  'leons_deals',
+  'mastermind_toys_deals',
+  'reebok_ca_deals',
+  'the_brick_deals',
+  'yepsavings_deals',
+]
 
 export async function GET(
   request: NextRequest,
@@ -21,7 +35,24 @@ export async function GET(
     const isRetailer = id.startsWith('retailer_')
     const isCostcoPhoto = id.startsWith('costco_photo_')
     const isCocoPrice = id.startsWith('cocoprice_')
-    const actualId = id.replace(/^(deal_|retailer_|costco_photo_|cocoprice_)/, '')
+
+    // Check if it's a specialty deal table (e.g., frank_and_oak_deals_123)
+    let dealTable: string | null = null
+    let actualId = id
+
+    for (const table of DEAL_TABLES) {
+      if (id.startsWith(`${table}_`)) {
+        dealTable = table
+        actualId = id.replace(`${table}_`, '')
+        break
+      }
+    }
+
+    // Fallback for simple prefixes
+    if (!dealTable && !isRetailer && !isCostcoPhoto && !isCocoPrice) {
+      actualId = id.replace(/^deal_/, '')
+      dealTable = 'deals'
+    }
 
     let product: ProductDetail | null = null
     let priceHistory: PricePoint[] = []
@@ -195,10 +226,10 @@ export async function GET(
         description: data.description || undefined,
         price_history: priceHistory,
       }
-    } else {
-      // Query deals table
+    } else if (dealTable) {
+      // Query the appropriate deals table (deals, frank_and_oak_deals, etc.)
       const { data, error } = await supabase
-        .from('deals')
+        .from(dealTable)
         .select('*')
         .eq('id', actualId)
         .single()
@@ -231,12 +262,17 @@ export async function GET(
         }]
       }
 
+      // Derive source from table name if not in data
+      const derivedSource = dealTable === 'deals'
+        ? (data.source || 'deals')
+        : dealTable.replace('_deals', '')
+
       product = {
-        id: `deal_${data.id}`,
+        id: `${dealTable}_${data.id}`,
         title: data.title || '',
         brand: data.brand || null,
-        store: data.store || 'Unknown',
-        source: data.source || 'deals',
+        store: data.store || derivedSource.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        source: data.source || derivedSource,
         image_url: data.image_blob_url || data.image_url || null,
         current_price: data.current_price || data.price,
         original_price: data.original_price,
@@ -250,6 +286,8 @@ export async function GET(
         description: data.description || undefined,
         price_history: priceHistory,
       }
+    } else {
+      return NextResponse.json({ error: 'Invalid product ID format' }, { status: 400 })
     }
 
     return NextResponse.json(product)

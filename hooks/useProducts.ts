@@ -44,6 +44,15 @@ function buildQueryString(filters: Partial<ProductFilters>): string {
 export function useProducts(filters: Partial<ProductFilters>) {
   const queryString = buildQueryString(filters)
 
+  // Only fetch when at least one filter is applied (sources, search, etc.)
+  const hasFilters = !!(
+    filters.sources?.length ||
+    filters.stores?.length ||
+    filters.regions?.length ||
+    filters.search ||
+    filters.minDiscount !== null && filters.minDiscount !== undefined
+  )
+
   return useQuery<ProductsResponse>({
     queryKey: ['products', queryString],
     queryFn: async () => {
@@ -53,6 +62,7 @@ export function useProducts(filters: Partial<ProductFilters>) {
       }
       return response.json()
     },
+    enabled: hasFilters, // Don't fetch until filters are applied
   })
 }
 
