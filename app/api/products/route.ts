@@ -83,7 +83,9 @@ export async function GET(request: NextRequest) {
 
       dealQueries.push(
         (async () => {
-          const r = await query.order('created_at', { ascending: sortOrder, nullsFirst: false }).limit(limit)
+          // Fetch enough items to satisfy pagination needs
+          const fetchLimit = Math.min(page * limit + limit, 500)
+          const r = await query.order('created_at', { ascending: sortOrder, nullsFirst: false }).limit(fetchLimit)
           return { table: table.name, source: table.source, data: r.data, error: r.error }
         })()
       )
@@ -177,15 +179,19 @@ export async function GET(request: NextRequest) {
       ['cocopricetracker'].includes(s.toLowerCase())
     )
 
+    // Calculate how many items to fetch per table to ensure we have enough for pagination
+    // We need (page * limit) items total to slice properly, fetching extra from each table
+    const fetchLimit = Math.min(page * limit + limit, 500) // Cap at 500 to avoid memory issues
+
     // Run all queries in parallel
     const [dealResults, countResults, retailerResult, retailerCountResult, costcoPhotosResult, costcoPhotosCountResult, cocopriceResult, cocopriceCountResult] = await Promise.all([
       Promise.all(dealQueries),
       Promise.all(countQueries),
-      includeRetailer ? retailerQuery.order('first_seen_at', { ascending: sortOrder, nullsFirst: false }).limit(limit) : Promise.resolve({ data: [] }),
+      includeRetailer ? retailerQuery.order('first_seen_at', { ascending: sortOrder, nullsFirst: false }).limit(fetchLimit) : Promise.resolve({ data: [] }),
       includeRetailer ? retailerCountQuery : Promise.resolve({ count: 0 }),
-      includeCostcoPhotos ? costcoPhotosQuery.order('scraped_at', { ascending: sortOrder, nullsFirst: false }).limit(limit) : Promise.resolve({ data: [] }),
+      includeCostcoPhotos ? costcoPhotosQuery.order('scraped_at', { ascending: sortOrder, nullsFirst: false }).limit(fetchLimit) : Promise.resolve({ data: [] }),
       includeCostcoPhotos ? costcoPhotosCountQuery : Promise.resolve({ count: 0 }),
-      includeCocoPrice ? cocopriceQuery.order('updated_at', { ascending: sortOrder, nullsFirst: false }).limit(limit) : Promise.resolve({ data: [] }),
+      includeCocoPrice ? cocopriceQuery.order('updated_at', { ascending: sortOrder, nullsFirst: false }).limit(fetchLimit) : Promise.resolve({ data: [] }),
       includeCocoPrice ? cocopriceCountQuery : Promise.resolve({ count: 0 }),
     ])
 

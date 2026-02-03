@@ -1,10 +1,19 @@
 "use client"
 
-import { useSystemHealth } from "@/hooks/useDroplet"
+import { useState, useEffect } from "react"
+import { useSystemHealth, useScrapers } from "@/hooks/useDroplet"
+import { useHealthHistory } from "@/hooks/useHealthHistory"
+import { useActivityFeed } from "@/hooks/useActivityFeed"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
+import {
+  HealthIndicator,
+  StatCardWithSparkline,
+  DonutChart,
+  ActivityLineChart,
+  ServerStatusTable,
+  RecentActivityFeed,
+} from "@/components/server-dashboard"
 import {
   Server,
   Cpu,
@@ -13,13 +22,9 @@ import {
   Wifi,
   ArrowDown,
   ArrowUp,
-  Clock,
-  Activity,
   RefreshCw,
   ArrowLeft,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
+  Activity,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 
@@ -31,233 +36,214 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
 }
 
-function formatUptime(seconds: number): string {
-  const days = Math.floor(seconds / 86400)
-  const hours = Math.floor((seconds % 86400) / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const secs = Math.floor(seconds % 60)
-  return `${days}d ${hours}h ${minutes}m ${secs}s`
-}
-
-const colorStyles: Record<string, { bg: string; text: string; ring: string; stroke: string }> = {
-  cyan: { bg: 'from-cyan-500 to-cyan-400', text: 'text-cyan-400', ring: 'ring-cyan-500/30', stroke: 'text-cyan-500' },
-  purple: { bg: 'from-purple-500 to-purple-400', text: 'text-purple-400', ring: 'ring-purple-500/30', stroke: 'text-purple-500' },
-  amber: { bg: 'from-amber-500 to-amber-400', text: 'text-amber-400', ring: 'ring-amber-500/30', stroke: 'text-amber-500' },
-}
-
-function GaugeCard({ title, value, icon: Icon, color, detail }: { title: string; value: number; icon: any; color: string; detail?: string }) {
-  const getStatusColor = (val: number) => {
-    if (val >= 90) return { bg: 'from-red-500 to-red-400', text: 'text-red-400', ring: 'ring-red-500/30', stroke: 'text-red-500' }
-    if (val >= 70) return { bg: 'from-amber-500 to-yellow-500', text: 'text-amber-400', ring: 'ring-amber-500/30', stroke: 'text-amber-500' }
-    return colorStyles[color] || colorStyles.cyan
-  }
-
-  const status = getStatusColor(value)
-
-  return (
-    <Card className="bg-slate-900/50 border-slate-700/50 backdrop-blur-sm">
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Icon className={`h-5 w-5 ${status.text}`} />
-            <span className="text-sm font-medium text-slate-300">{title}</span>
-          </div>
-          <Badge variant="outline" className={`${value >= 90 ? 'bg-red-500/20 text-red-400 border-red-500/50' : value >= 70 ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' : 'bg-green-500/20 text-green-400 border-green-500/50'}`}>
-            {value >= 90 ? 'Critical' : value >= 70 ? 'Warning' : 'Healthy'}
-          </Badge>
-        </div>
-
-        <div className="relative">
-          <div className="flex items-center justify-center">
-            <div className={`relative w-32 h-32 rounded-full ring-4 ${status.ring} bg-slate-800/50`}>
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="8" className="text-slate-700" />
-                <circle
-                  cx="50" cy="50" r="45" fill="none" strokeWidth="8"
-                  strokeLinecap="round"
-                  className={status.stroke}
-                  strokeDasharray={`${value * 2.83} 283`}
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className={`text-3xl font-bold ${status.text}`}>{value}%</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {detail && <div className="text-center text-xs text-slate-500 mt-4">{detail}</div>}
-      </CardContent>
-    </Card>
-  )
-}
-
 export default function ServerPage() {
   const router = useRouter()
-  const { data: health, isLoading, error, refetch } = useSystemHealth()
+  const { data: health, isLoading: healthLoading, error: healthError, refetch: refetchHealth } = useSystemHealth()
+  const { data: scrapers, isLoading: scrapersLoading } = useScrapers()
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'healthy': return <CheckCircle2 className="h-5 w-5 text-green-500" />
-      case 'degraded': return <AlertTriangle className="h-5 w-5 text-amber-500" />
-      case 'critical': return <XCircle className="h-5 w-5 text-red-500" />
-      default: return <Activity className="h-5 w-5 text-slate-500" />
+  const [lastCheckTime, setLastCheckTime] = useState(Date.now())
+
+  // Track health history for sparklines
+  const healthHistory = useHealthHistory(health)
+
+  // Generate activity events from scraper changes
+  const activityEvents = useActivityFeed(scrapers)
+
+  // Update last check time when health data changes
+  useEffect(() => {
+    if (health) {
+      setLastCheckTime(Date.now())
     }
+  }, [health])
+
+  const handleRefresh = () => {
+    refetchHealth()
+  }
+
+  // Count scrapers by status
+  const scraperCounts = {
+    total: scrapers?.length || 0,
+    running: scrapers?.filter(s => s.last_status === 'running').length || 0,
+    success: scrapers?.filter(s => s.last_status === 'success').length || 0,
+    failed: scrapers?.filter(s => s.last_status === 'failed').length || 0,
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black to-slate-800 text-slate-100 p-6">
-      <div className="container mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 p-6">
+      <div className="container mx-auto max-w-7xl">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.push('/')} className="text-slate-400 hover:text-slate-100">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push('/')}
+              className="text-slate-400 hover:text-slate-100"
+            >
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div className="flex items-center gap-2">
               <Server className="h-8 w-8 text-cyan-500" />
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">Server Health</h1>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+                Server Monitoring
+              </h1>
             </div>
           </div>
-          <Button variant="outline" onClick={() => refetch()} className="bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-slate-100">
+          <Button
+            variant="outline"
+            onClick={handleRefresh}
+            className="bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-slate-100"
+          >
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
         </div>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500"></div>
-          </div>
-        ) : error ? (
+        {healthError ? (
           <Card className="bg-red-500/10 border-red-500/50">
             <CardContent className="p-6 text-center text-red-400">
               Failed to load server health data. The server may be offline.
             </CardContent>
           </Card>
-        ) : health ? (
+        ) : (
           <div className="space-y-6">
-            {/* Status Banner */}
-            <Card className={`border-2 ${health.status === 'healthy' ? 'bg-green-500/10 border-green-500/50' : health.status === 'degraded' ? 'bg-amber-500/10 border-amber-500/50' : 'bg-red-500/10 border-red-500/50'}`}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {getStatusIcon(health.status)}
-                    <div>
-                      <h2 className="text-lg font-semibold">System Status: {health.status.toUpperCase()}</h2>
-                      <p className="text-sm text-slate-400">All services are monitored in real-time</p>
+            {/* Health Indicator Banner */}
+            <HealthIndicator health={health} lastCheckTime={lastCheckTime} />
+
+            {/* Stat Cards with Sparklines */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCardWithSparkline
+                title="CPU Usage"
+                value={health?.cpu_percent ?? 0}
+                icon={<Cpu className="h-4 w-4 text-cyan-400" />}
+                history={healthHistory}
+                dataKey="cpu"
+                color="cyan"
+              />
+              <StatCardWithSparkline
+                title="Memory"
+                value={health?.memory_percent ?? 0}
+                icon={<Database className="h-4 w-4 text-purple-400" />}
+                history={healthHistory}
+                dataKey="memory"
+                color="purple"
+              />
+              <StatCardWithSparkline
+                title="Disk"
+                value={health?.disk_percent ?? 0}
+                icon={<HardDrive className="h-4 w-4 text-amber-400" />}
+                history={healthHistory}
+                dataKey="disk"
+                color="amber"
+              />
+              <Card className="bg-slate-900/50 border-slate-700/50 backdrop-blur-sm">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded bg-green-500/10">
+                        <Activity className="h-4 w-4 text-green-400" />
+                      </div>
+                      <span className="text-sm text-slate-400">Scrapers</span>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm text-slate-400">Uptime</div>
-                    <div className="text-lg font-mono text-cyan-400">{formatUptime(health.uptime_seconds)}</div>
+                  <div className="flex items-end justify-between">
+                    <div className="text-3xl font-bold text-green-400">
+                      {scraperCounts.total}
+                    </div>
+                    <div className="flex gap-2 text-xs">
+                      <span className="text-green-400">{scraperCounts.success} ok</span>
+                      {scraperCounts.running > 0 && (
+                        <span className="text-cyan-400">{scraperCounts.running} running</span>
+                      )}
+                      {scraperCounts.failed > 0 && (
+                        <span className="text-red-400">{scraperCounts.failed} failed</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Resource Gauges */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <GaugeCard title="CPU Usage" value={Math.round(health.cpu_percent ?? 0)} icon={Cpu} color="cyan" detail="Processing power utilization" />
-              <GaugeCard title="Memory Usage" value={Math.round(health.memory_percent ?? 0)} icon={Database} color="purple" detail="RAM consumption" />
-              <GaugeCard title="Disk Usage" value={Math.round(health.disk_percent ?? 0)} icon={HardDrive} color="amber" detail={`${(health.disk_used_gb ?? 0).toFixed(1)} GB / ${(health.disk_total_gb ?? 0).toFixed(0)} GB`} />
+                </CardContent>
+              </Card>
             </div>
 
-            {/* Detailed Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Disk Details */}
+            {/* Charts Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Activity Line Chart */}
+              <ActivityLineChart history={healthHistory} />
+
+              {/* Resource Donuts */}
               <Card className="bg-slate-900/50 border-slate-700/50 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-slate-100">
-                    <HardDrive className="h-5 w-5 text-amber-500" />
-                    Disk Storage
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-slate-100 text-sm">
+                    <Server className="h-4 w-4 text-cyan-500" />
+                    Resource Usage
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-400">Used</span>
-                      <span className="text-slate-200">{(health.disk_used_gb ?? 0).toFixed(2)} GB</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-400">Total</span>
-                      <span className="text-slate-200">{(health.disk_total_gb ?? 0).toFixed(2)} GB</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-400">Free</span>
-                      <span className="text-green-400">{((health.disk_total_gb ?? 0) - (health.disk_used_gb ?? 0)).toFixed(2)} GB</span>
-                    </div>
-                  </div>
-                  <div className="h-3 bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${health.disk_percent >= 90 ? 'bg-gradient-to-r from-red-500 to-red-400' : health.disk_percent >= 70 ? 'bg-gradient-to-r from-amber-500 to-yellow-500' : 'bg-gradient-to-r from-amber-500 to-amber-400'}`}
-                      style={{ width: `${health.disk_percent}%` }}
+                <CardContent>
+                  <div className="flex items-center justify-around py-4">
+                    <DonutChart
+                      value={health?.cpu_percent ?? 0}
+                      label="CPU"
+                      color="cyan"
+                    />
+                    <DonutChart
+                      value={health?.memory_percent ?? 0}
+                      label="Memory"
+                      color="purple"
+                    />
+                    <DonutChart
+                      value={health?.disk_percent ?? 0}
+                      label="Disk"
+                      color="amber"
                     />
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Network Stats */}
-              <Card className="bg-slate-900/50 border-slate-700/50 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-slate-100">
-                    <Wifi className="h-5 w-5 text-blue-500" />
-                    Network Traffic
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
-                      <div className="flex items-center gap-2 mb-2">
-                        <ArrowDown className="h-4 w-4 text-green-500" />
-                        <span className="text-sm text-slate-400">Download</span>
-                      </div>
-                      <div className="text-xl font-mono text-green-400">{formatBytes(health.network_rx_bytes)}</div>
-                    </div>
-                    <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
-                      <div className="flex items-center gap-2 mb-2">
-                        <ArrowUp className="h-4 w-4 text-blue-500" />
-                        <span className="text-sm text-slate-400">Upload</span>
-                      </div>
-                      <div className="text-xl font-mono text-blue-400">{formatBytes(health.network_tx_bytes)}</div>
-                    </div>
-                  </div>
-                  <div className="text-xs text-slate-500 text-center">Total bytes transferred since system boot</div>
-                </CardContent>
-              </Card>
             </div>
 
-            {/* System Info */}
+            {/* Data Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Server Status Table */}
+              <ServerStatusTable scrapers={scrapers} isLoading={scrapersLoading} />
+
+              {/* Recent Activity Feed */}
+              <RecentActivityFeed events={activityEvents} />
+            </div>
+
+            {/* Network Stats */}
             <Card className="bg-slate-900/50 border-slate-700/50 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-slate-100">
-                  <Clock className="h-5 w-5 text-cyan-500" />
-                  System Information
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-slate-100 text-sm">
+                  <Wifi className="h-4 w-4 text-blue-500" />
+                  Network Traffic
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
-                    <div className="text-xs text-slate-500 mb-1">Status</div>
-                    <div className={`text-lg font-medium capitalize ${health.status === 'healthy' ? 'text-green-400' : health.status === 'degraded' ? 'text-amber-400' : 'text-red-400'}`}>{health.status}</div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <ArrowDown className="h-4 w-4 text-green-500" />
+                      <span className="text-sm text-slate-400">Download</span>
+                    </div>
+                    <div className="text-2xl font-mono text-green-400">
+                      {formatBytes(health?.network_rx_bytes ?? 0)}
+                    </div>
                   </div>
                   <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
-                    <div className="text-xs text-slate-500 mb-1">Uptime</div>
-                    <div className="text-lg font-mono text-slate-200">{formatUptime(health.uptime_seconds)}</div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <ArrowUp className="h-4 w-4 text-blue-500" />
+                      <span className="text-sm text-slate-400">Upload</span>
+                    </div>
+                    <div className="text-2xl font-mono text-blue-400">
+                      {formatBytes(health?.network_tx_bytes ?? 0)}
+                    </div>
                   </div>
-                  <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
-                    <div className="text-xs text-slate-500 mb-1">CPU Load</div>
-                    <div className="text-lg font-mono text-cyan-400">{(health.cpu_percent ?? 0).toFixed(1)}%</div>
-                  </div>
-                  <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
-                    <div className="text-xs text-slate-500 mb-1">Memory Load</div>
-                    <div className="text-lg font-mono text-purple-400">{(health.memory_percent ?? 0).toFixed(1)}%</div>
-                  </div>
+                </div>
+                <div className="text-xs text-slate-500 text-center mt-4">
+                  Total bytes transferred since system boot
                 </div>
               </CardContent>
             </Card>
           </div>
-        ) : null}
+        )}
       </div>
     </div>
   )

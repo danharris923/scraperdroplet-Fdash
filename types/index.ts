@@ -103,3 +103,24 @@ export interface SimilarProduct extends Product {
   similarity_score: number
   match_reason: string
 }
+
+export interface HealthHistoryPoint {
+  timestamp: number
+  cpu: number
+  memory: number
+  disk: number
+}
+
+export interface ActivityEvent {
+  id: string
+  type: 'scraper_start' | 'scraper_complete' | 'scraper_error' | 'system_alert' | 'items_found'
+  message: string
+  timestamp: number
+  scraper?: string
+  details?: {
+    itemsFound?: number
+    itemsNew?: number
+    duration?: number
+    error?: string
+  }
+}
