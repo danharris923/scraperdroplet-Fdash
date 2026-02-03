@@ -79,14 +79,32 @@ export async function GET(
       }
 
       const isUSA = data.source === 'warehouse_runner'
+      const scrapedAt = data.scraped_at || data.created_at || new Date().toISOString()
 
-      // Create single price point from current data
-      priceHistory = [{
-        price: data.price,
-        original_price: data.original_price,
-        scraped_at: data.scraped_at || data.created_at || new Date().toISOString(),
-        is_on_sale: (data.discount_percent || 0) > 0,
-      }]
+      // If we have original price > current price, show price drop
+      if (data.original_price && data.original_price > data.price) {
+        priceHistory = [
+          {
+            price: data.original_price,
+            original_price: data.original_price,
+            scraped_at: scrapedAt,
+            is_on_sale: false,
+          },
+          {
+            price: data.price,
+            original_price: data.original_price,
+            scraped_at: data.updated_at || new Date().toISOString(),
+            is_on_sale: true,
+          }
+        ]
+      } else {
+        priceHistory = [{
+          price: data.price,
+          original_price: data.original_price,
+          scraped_at: scrapedAt,
+          is_on_sale: (data.discount_percent || 0) > 0,
+        }]
+      }
 
       product = {
         id: `costco_photo_${data.id}`,
@@ -139,13 +157,21 @@ export async function GET(
           is_on_sale: h.is_on_sale ?? false,
         }))
       } else {
-        // If no price history, create single point from current data
-        priceHistory = [{
-          price: data.current_price,
-          original_price: data.original_price,
-          scraped_at: data.first_seen_at || new Date().toISOString(),
-          is_on_sale: (data.sale_percentage || data.discount_percent || 0) > 0,
-        }]
+        // If no price history but have original > current, show price drop
+        const firstSeen = data.first_seen_at || new Date().toISOString()
+        if (data.original_price && data.original_price > data.current_price) {
+          priceHistory = [
+            { price: data.original_price, original_price: data.original_price, scraped_at: firstSeen, is_on_sale: false },
+            { price: data.current_price, original_price: data.original_price, scraped_at: data.last_seen_at || new Date().toISOString(), is_on_sale: true }
+          ]
+        } else {
+          priceHistory = [{
+            price: data.current_price,
+            original_price: data.original_price,
+            scraped_at: firstSeen,
+            is_on_sale: (data.sale_percentage || data.discount_percent || 0) > 0,
+          }]
+        }
       }
 
       product = {
@@ -207,13 +233,21 @@ export async function GET(
           is_on_sale: h.is_on_sale ?? false,
         }))
       } else {
-        // If no price history, create a single point from current data
-        priceHistory = [{
-          price: data.current_price,
-          original_price: data.original_price,
-          scraped_at: data.first_seen_at || new Date().toISOString(),
-          is_on_sale: (data.sale_percentage || data.discount_percent || 0) > 0,
-        }]
+        // If no price history but have original > current, show price drop
+        const firstSeen = data.first_seen_at || new Date().toISOString()
+        if (data.original_price && data.original_price > data.current_price) {
+          priceHistory = [
+            { price: data.original_price, original_price: data.original_price, scraped_at: firstSeen, is_on_sale: false },
+            { price: data.current_price, original_price: data.original_price, scraped_at: data.last_seen_at || new Date().toISOString(), is_on_sale: true }
+          ]
+        } else {
+          priceHistory = [{
+            price: data.current_price,
+            original_price: data.original_price,
+            scraped_at: firstSeen,
+            is_on_sale: (data.sale_percentage || data.discount_percent || 0) > 0,
+          }]
+        }
       }
 
       product = {
@@ -262,13 +296,22 @@ export async function GET(
           is_on_sale: h.is_on_sale ?? false,
         }))
       } else {
-        // If no price history, create a single point from current data
-        priceHistory = [{
-          price: data.current_price || data.price,
-          original_price: data.original_price,
-          scraped_at: data.date_added || data.created_at || new Date().toISOString(),
-          is_on_sale: (data.discount_percent || 0) > 0,
-        }]
+        // If no price history but have original > current, show price drop
+        const currentPrice = data.current_price || data.price
+        const firstSeen = data.date_added || data.created_at || new Date().toISOString()
+        if (data.original_price && data.original_price > currentPrice) {
+          priceHistory = [
+            { price: data.original_price, original_price: data.original_price, scraped_at: firstSeen, is_on_sale: false },
+            { price: currentPrice, original_price: data.original_price, scraped_at: data.date_updated || data.updated_at || new Date().toISOString(), is_on_sale: true }
+          ]
+        } else {
+          priceHistory = [{
+            price: currentPrice,
+            original_price: data.original_price,
+            scraped_at: firstSeen,
+            is_on_sale: (data.discount_percent || 0) > 0,
+          }]
+        }
       }
 
       // Derive source from table name if not in data
