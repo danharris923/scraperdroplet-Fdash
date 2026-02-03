@@ -1,12 +1,8 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
@@ -19,11 +15,8 @@ import {
   ShoppingBag,
   Filter,
   ExternalLink,
-  TrendingDown,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
-  ChevronUp,
   Loader2,
   Package,
   Clock,
@@ -97,7 +90,7 @@ const PRICE_RANGES = [
   { value: 'over250', label: 'Over $250', min: 250, max: null },
 ]
 
-// Collapsible filter section component (Newegg-style)
+// Collapsible filter section component - simplified
 function FilterSection({
   title,
   children,
@@ -110,24 +103,20 @@ function FilterSection({
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
 
   return (
-    <div className="border-b border-slate-700 pb-4">
+    <div className="border-b border-slate-700 pb-3 mb-3">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between w-full py-2 text-left hover:text-cyan-400 "
+        className="flex items-center justify-between w-full py-1 text-left text-sm font-medium text-slate-300"
       >
-        <span className="text-sm font-medium text-slate-300">{title}</span>
-        {isExpanded ? (
-          <ChevronUp className="h-4 w-4 text-slate-500" />
-        ) : (
-          <ChevronDown className="h-4 w-4 text-slate-500" />
-        )}
+        {title}
+        <span className="text-slate-500">{isExpanded ? '−' : '+'}</span>
       </button>
       {isExpanded && <div className="mt-2">{children}</div>}
     </div>
   )
 }
 
-// Filter list with "Show More" functionality
+// Filter list - simplified
 function FilterList({
   options,
   selectedValues,
@@ -146,41 +135,25 @@ function FilterList({
   return (
     <div className="space-y-1">
       {displayedOptions.map((option) => (
-        <div
+        <label
           key={option.value}
-          className="flex items-center space-x-2 py-1 hover:bg-slate-800 rounded px-1 -mx-1 cursor-pointer"
-          onClick={() => onToggle(option.value)}
+          className="flex items-center gap-2 py-0.5 cursor-pointer text-sm text-slate-300"
         >
-          <Checkbox
-            id={`filter-${option.value}`}
+          <input
+            type="checkbox"
             checked={selectedValues.includes(option.value)}
-            onCheckedChange={() => onToggle(option.value)}
-            className="border-slate-600 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
+            onChange={() => onToggle(option.value)}
+            className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 text-cyan-500"
           />
-          <Label
-            htmlFor={`filter-${option.value}`}
-            className="text-sm text-slate-300 cursor-pointer flex-1 select-none"
-          >
-            {option.label}
-          </Label>
-        </div>
+          {option.label}
+        </label>
       ))}
       {hasMore && (
         <button
           onClick={() => setShowAll(!showAll)}
-          className="text-xs text-cyan-400 hover:text-cyan-300 mt-2 flex items-center gap-1"
+          className="text-xs text-cyan-400 mt-1"
         >
-          {showAll ? (
-            <>
-              <ChevronUp className="h-3 w-3" />
-              Show Less
-            </>
-          ) : (
-            <>
-              <ChevronDown className="h-3 w-3" />
-              Show More ({options.length - initialShowCount} more)
-            </>
-          )}
+          {showAll ? 'Show Less' : `+${options.length - initialShowCount} more`}
         </button>
       )}
     </div>
@@ -499,62 +472,43 @@ function ProductCard({ product, onClick }: { product: Product; onClick: () => vo
   const isCostco = ['cocowest', 'warehouse_runner', 'cocopricetracker'].includes(product.source)
 
   return (
-    <Card
-      className="bg-slate-900 border-slate-700 hover:border-cyan-500/50 cursor-pointer"
+    <div
+      className="bg-slate-900 border border-slate-700 rounded-lg p-3 cursor-pointer"
       onClick={onClick}
     >
-      <CardContent className="p-4">
-        <div className="aspect-square bg-slate-800 rounded-lg mb-3 flex items-center justify-center overflow-hidden relative">
-          {product.image_url ? (
-            <img src={product.image_url} alt={product.title} className="w-full h-full object-cover" />
-          ) : (
-            <ShoppingBag className="h-12 w-12 text-slate-600" />
-          )}
-          {(product.discount_percent ?? 0) > 0 && (
-            <Badge className={`absolute top-2 right-2 ${(product.discount_percent ?? 0) >= 30 ? 'bg-red-500/90 text-white' : 'bg-amber-500/90 text-white'}`}>
-              -{product.discount_percent}%
-            </Badge>
-          )}
-          <Badge
-            variant="outline"
-            className={`absolute bottom-2 left-2 text-xs ${
-              isCostco
-                ? 'bg-red-900/80 text-red-300 border-red-600/50'
-                : 'bg-slate-900/80 text-slate-300 border-slate-600/50'
-            }`}
-          >
-            {formatSource(product.source)}
-          </Badge>
-          {product.region && (
-            <Badge variant="outline" className="absolute bottom-2 right-2 bg-purple-900/80 text-purple-300 border-purple-600/50 text-xs">
-              {product.region}
-            </Badge>
-          )}
-        </div>
-        <div className="space-y-2">
-          <div className="text-xs text-slate-500">{product.store}</div>
-          <h3 className="text-sm font-medium text-slate-200 line-clamp-2 min-h-[2.5rem]">{product.title}</h3>
-          <div className="flex items-baseline gap-2">
-            <span className="text-lg font-bold text-cyan-400">${(product.current_price ?? 0).toFixed(2)}</span>
-            {product.original_price && product.original_price > (product.current_price ?? 0) && (
-              <span className="text-sm text-slate-500 line-through">${(product.original_price ?? 0).toFixed(2)}</span>
-            )}
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full mt-2 bg-slate-800 border-slate-700 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/50"
-            onClick={(e) => {
-              e.stopPropagation()
-              window.open(product.affiliate_url, '_blank', 'noopener,noreferrer')
-            }}
-          >
-            <ExternalLink className="h-3 w-3 mr-2" />
-            View Deal
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+      <div className="aspect-square bg-slate-800 rounded mb-2 flex items-center justify-center overflow-hidden relative">
+        {product.image_url ? (
+          <img src={product.image_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <ShoppingBag className="h-10 w-10 text-slate-600" />
+        )}
+        {(product.discount_percent ?? 0) > 0 && (
+          <span className={`absolute top-1 right-1 px-1.5 py-0.5 text-xs font-medium rounded ${(product.discount_percent ?? 0) >= 30 ? 'bg-red-600 text-white' : 'bg-amber-600 text-white'}`}>
+            -{product.discount_percent}%
+          </span>
+        )}
+        <span className={`absolute bottom-1 left-1 px-1.5 py-0.5 text-xs rounded ${isCostco ? 'bg-red-900 text-red-300' : 'bg-slate-800 text-slate-300'}`}>
+          {formatSource(product.source)}
+        </span>
+      </div>
+      <div className="text-xs text-slate-500 truncate">{product.store}</div>
+      <h3 className="text-sm text-slate-200 line-clamp-2 min-h-[2.5rem] mt-1">{product.title}</h3>
+      <div className="flex items-baseline gap-2 mt-1">
+        <span className="text-base font-bold text-cyan-400">${(product.current_price ?? 0).toFixed(2)}</span>
+        {product.original_price && product.original_price > (product.current_price ?? 0) && (
+          <span className="text-xs text-slate-500 line-through">${(product.original_price ?? 0).toFixed(2)}</span>
+        )}
+      </div>
+      <button
+        className="w-full mt-2 py-1.5 text-xs bg-slate-800 border border-slate-700 text-slate-400 rounded"
+        onClick={(e) => {
+          e.stopPropagation()
+          window.open(product.affiliate_url, '_blank', 'noopener,noreferrer')
+        }}
+      >
+        View Deal
+      </button>
+    </div>
   )
 }
 
@@ -697,45 +651,40 @@ export default function ProductsPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Filters Sidebar - Newegg Style */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          {/* Filters Sidebar */}
           <div className="lg:col-span-1">
-            <Card className="bg-slate-900 border-slate-700  sticky top-6">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-slate-100 text-base">
-                    <Filter className="h-4 w-4 text-cyan-500" />
-                    Filters
-                    {activeFilterCount > 0 && (
-                      <Badge className="bg-cyan-500/20 text-cyan-400 border-cyan-500/30 text-xs">
-                        {activeFilterCount}
-                      </Badge>
-                    )}
-                  </CardTitle>
-                  {hasFilters && (
-                    <button
-                      onClick={clearAllFilters}
-                      className="text-xs text-cyan-400 hover:text-cyan-300"
-                    >
-                      Clear All
-                    </button>
+            <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 sticky top-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2 text-slate-100 font-medium">
+                  <Filter className="h-4 w-4 text-cyan-500" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="bg-cyan-900 text-cyan-400 text-xs px-1.5 py-0.5 rounded">
+                      {activeFilterCount}
+                    </span>
                   )}
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-2 pt-2">
-                {/* Search */}
-                <div className="pb-4 border-b border-slate-700">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                    <Input
-                      type="text"
-                      placeholder="Search products..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9 bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500"
-                    />
-                  </div>
+                {hasFilters && (
+                  <button onClick={clearAllFilters} className="text-xs text-cyan-400">
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {/* Search */}
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-2 text-sm bg-slate-800 border border-slate-700 rounded text-slate-100 placeholder:text-slate-500"
+                  />
                 </div>
+              </div>
 
                 {filterLoading ? (
                   <div className="flex items-center justify-center py-8">
@@ -817,69 +766,41 @@ export default function ProductsPage() {
                     <FilterSection title="Discount" defaultExpanded={true}>
                       <div className="space-y-1">
                         {DISCOUNTS.map((discount) => (
-                          <div
+                          <label
                             key={discount.value}
-                            className="flex items-center space-x-2 py-1 hover:bg-slate-800 rounded px-1 -mx-1 cursor-pointer"
-                            onClick={() => toggleDiscount(discount.value)}
+                            className="flex items-center gap-2 py-0.5 cursor-pointer text-sm text-slate-300"
                           >
-                            <Checkbox
-                              id={`discount-${discount.value}`}
+                            <input
+                              type="checkbox"
                               checked={minDiscount === discount.value}
-                              onCheckedChange={() => toggleDiscount(discount.value)}
-                              className="border-slate-600 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
+                              onChange={() => toggleDiscount(discount.value)}
+                              className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 text-cyan-500"
                             />
-                            <Label
-                              htmlFor={`discount-${discount.value}`}
-                              className="text-sm text-slate-300 cursor-pointer flex-1 select-none"
-                            >
-                              {discount.label}
-                            </Label>
-                          </div>
+                            {discount.label}
+                          </label>
                         ))}
                       </div>
                     </FilterSection>
                   </>
                 )}
 
-                {/* Database Stats */}
-                {filterOptions?.counts && (
-                  <div className="pt-4 border-t border-slate-700">
-                    <div className="text-xs text-slate-500 space-y-1">
-                      <div className="flex justify-between">
-                        <span>Total Products:</span>
-                        <span className="text-cyan-400 font-medium">
-                          {filterOptions.counts.totalProducts.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Sources:</span>
-                        <span className="text-slate-400">{filterOptions.counts.sources}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Stores:</span>
-                        <span className="text-slate-400">{filterOptions.counts.stores}</span>
-                      </div>
-                    </div>
+              {/* Database Stats */}
+              {filterOptions?.counts && (
+                <div className="pt-3 mt-3 border-t border-slate-700 text-xs text-slate-500 space-y-1">
+                  <div className="flex justify-between">
+                    <span>Total:</span>
+                    <span className="text-cyan-400">{filterOptions.counts.totalProducts.toLocaleString()}</span>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Products Grid */}
           <div className="lg:col-span-3">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="bg-slate-800 text-slate-400 border-slate-600/50" title={`${total.toLocaleString()} products`}>
-                  {formatLargeNumber(total)} products
-                </Badge>
-                {minDiscount && (
-                  <Badge className="bg-green-500/20 text-green-400 border-green-500/50">
-                    <TrendingDown className="h-3 w-3 mr-1" />
-                    {minDiscount}%+ off
-                  </Badge>
-                )}
-              </div>
+            <div className="flex items-center gap-2 mb-4 text-sm text-slate-400">
+              <span>{formatLargeNumber(total)} products</span>
+              {minDiscount && <span className="text-green-400">{minDiscount}%+ off</span>}
             </div>
 
             {isLoading ? (
@@ -887,14 +808,12 @@ export default function ProductsPage() {
                 <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
               </div>
             ) : error ? (
-              <Card className="bg-red-500/10 border-red-500/50">
-                <CardContent className="p-6 text-center text-red-400">
-                  Failed to load products. Please try again later.
-                </CardContent>
-              </Card>
+              <div className="p-6 text-center text-red-400 bg-red-900/20 border border-red-800 rounded-lg">
+                Failed to load products. Please try again.
+              </div>
             ) : products.length > 0 ? (
               <>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {products.map(product => (
                     <ProductCard
                       key={product.id}
@@ -906,64 +825,42 @@ export default function ProductsPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-center gap-2 mt-8">
-                    <Button
-                      variant="outline"
-                      size="icon"
+                  <div className="flex items-center justify-center gap-1 mt-6">
+                    <button
                       onClick={() => setPage(p => Math.max(1, p - 1))}
                       disabled={page === 1}
-                      className="bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-100 disabled:opacity-50"
+                      className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-400 disabled:opacity-50"
                     >
                       <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum
-                        if (totalPages <= 5) {
-                          pageNum = i + 1
-                        } else if (page <= 3) {
-                          pageNum = i + 1
-                        } else if (page >= totalPages - 2) {
-                          pageNum = totalPages - 4 + i
-                        } else {
-                          pageNum = page - 2 + i
-                        }
-                        return (
-                          <Button
-                            key={pageNum}
-                            variant={pageNum === page ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => setPage(pageNum)}
-                            className={pageNum === page
-                              ? "bg-cyan-500 text-white"
-                              : "bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-100"
-                            }
-                          >
-                            {pageNum}
-                          </Button>
-                        )
-                      })}
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="icon"
+                    </button>
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum = totalPages <= 5 ? i + 1 : page <= 3 ? i + 1 : page >= totalPages - 2 ? totalPages - 4 + i : page - 2 + i
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setPage(pageNum)}
+                          className={`px-3 py-1.5 rounded text-sm ${pageNum === page ? 'bg-cyan-600 text-white' : 'bg-slate-800 border border-slate-700 text-slate-400'}`}
+                        >
+                          {pageNum}
+                        </button>
+                      )
+                    })}
+                    <button
                       onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                       disabled={page === totalPages}
-                      className="bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-100 disabled:opacity-50"
+                      className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-400 disabled:opacity-50"
                     >
                       <ChevronRight className="h-4 w-4" />
-                    </Button>
+                    </button>
                   </div>
                 )}
               </>
             ) : (
-              <Card className="bg-slate-900 border-slate-700">
-                <CardContent className="p-12 text-center">
-                  <ShoppingBag className="h-16 w-16 text-slate-600 mx-auto mb-4" />
-                  <p className="text-slate-400 text-lg">No products found</p>
-                  <p className="text-sm text-slate-500 mt-1">Try adjusting your filters or search terms</p>
-                </CardContent>
-              </Card>
+              <div className="p-12 text-center bg-slate-900 border border-slate-700 rounded-lg">
+                <ShoppingBag className="h-12 w-12 text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-400">No products found</p>
+                <p className="text-sm text-slate-500 mt-1">Try adjusting your filters</p>
+              </div>
             )}
           </div>
         </div>

@@ -31,7 +31,7 @@ export async function GET(
 
     const supabase = getServiceSupabase()
 
-    // Parse the id to determine source table
+    // Parse the id to determine source table and extract actual ID
     const isRetailer = id.startsWith('retailer_')
     const isCostcoPhoto = id.startsWith('costco_photo_')
     const isCocoPrice = id.startsWith('cocoprice_')
@@ -39,6 +39,15 @@ export async function GET(
     // Check if it's a specialty deal table (e.g., frank_and_oak_deals_123)
     let dealTable: string | null = null
     let actualId = id
+
+    // Extract actual ID from prefixed IDs
+    if (isRetailer) {
+      actualId = id.replace('retailer_', '')
+    } else if (isCostcoPhoto) {
+      actualId = id.replace('costco_photo_', '')
+    } else if (isCocoPrice) {
+      actualId = id.replace('cocoprice_', '')
+    }
 
     for (const table of DEAL_TABLES) {
       if (id.startsWith(`${table}_`)) {
