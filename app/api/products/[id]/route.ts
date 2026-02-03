@@ -174,13 +174,18 @@ export async function GET(
         }
       }
 
+      // CocoPriceTracker uses unified mode - images in thumbnail_url
+      const cocoImageUrl = (data.thumbnail_url && !data.thumbnail_url.includes('LogoMobile'))
+        ? data.thumbnail_url
+        : (data.images?.length > 0 ? data.images[0] : null)
+
       product = {
         id: `cocoprice_${data.id}`,
         title: data.title || '',
         brand: data.brand || null,
         store: 'Costco',
         source: 'cocopricetracker',
-        image_url: data.thumbnail_url || null,
+        image_url: cocoImageUrl,
         current_price: data.current_price,
         original_price: data.original_price,
         discount_percent: data.sale_percentage || data.discount_percent,

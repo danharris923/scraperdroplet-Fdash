@@ -303,14 +303,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Normalize CocoPriceTracker data (from retailer_products with extra_data.source = 'cocopricetracker.ca')
+    // CocoPriceTracker uses unified mode - images are in thumbnail_url column
     if (cocopriceResult.data) {
       for (const r of cocopriceResult.data) {
         const extraData = r.extra_data || {}
         const region = extraData.region || 'west'
-        const cocoImages = r.images || []
-        const cocoImageUrl = cocoImages.length > 0
-          ? cocoImages[0]
-          : (extraData.image_url || (r.thumbnail_url && !r.thumbnail_url.includes('LogoMobile') ? r.thumbnail_url : null))
+        // Priority: thumbnail_url (unified mode), then images array, then extra_data.image_url
+        const cocoImageUrl = (r.thumbnail_url && !r.thumbnail_url.includes('LogoMobile'))
+          ? r.thumbnail_url
+          : (r.images?.length > 0 ? r.images[0] : (extraData.image_url || null))
         allProducts.push({
           id: `cocoprice_${r.id}`,
           title: r.title || '',
