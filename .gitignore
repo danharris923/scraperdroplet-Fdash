@@ -9,24 +9,15 @@ __pycache__/
 .env.*
 
 # Build artifacts
-.next/
-out/
 dist/
 /build
 *.zip
 
 # Debug logs
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
 
 # Vercel
 .vercel
-
-# TypeScript
-*.tsbuildinfo
-next-env.d.ts
 
 # IDE
 .idea/
@@ -39,3 +30,6 @@ Thumbs.db
 
 # Misc
 .deps_installed
+
+# Backup files
+*.bak_*

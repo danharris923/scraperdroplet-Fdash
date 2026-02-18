@@ -38,8 +38,9 @@ from config import (
 app = Flask(__name__, static_folder=None)
 CORS(app)  # Allow all origins for local dev
 
-# Path to frontend files (served statically)
-FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+# Path to frontend files (served statically in local dev only — Vercel serves from public/)
+if not os.getenv("VERCEL"):
+    FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
 
 
 # ──────────────────────────────────────────────
@@ -202,23 +203,23 @@ def normalize_cocoprice(row, sku_image_map=None):
 
 # ══════════════════════════════════════════════
 # FRONTEND STATIC FILE SERVING
-# Serve index.html, CSS, and JS files from the frontend/ directory
+# Serve index.html, CSS, and JS files from the frontend/ directory.
+# Only registered for local dev — on Vercel, static files are served from public/ by the CDN.
 # ══════════════════════════════════════════════
 
-@app.route("/")
-def serve_index():
-    """Serve the main frontend page."""
-    return send_from_directory(FRONTEND_DIR, "index.html")
+if not os.getenv("VERCEL"):
+    @app.route("/")
+    def serve_index():
+        """Serve the main frontend page."""
+        return send_from_directory(FRONTEND_DIR, "index.html")
 
+    @app.route("/css/<path:filename>")
+    def serve_css(filename):
+        return send_from_directory(os.path.join(FRONTEND_DIR, "css"), filename)
 
-@app.route("/css/<path:filename>")
-def serve_css(filename):
-    return send_from_directory(os.path.join(FRONTEND_DIR, "css"), filename)
-
-
-@app.route("/js/<path:filename>")
-def serve_js(filename):
-    return send_from_directory(os.path.join(FRONTEND_DIR, "js"), filename)
+    @app.route("/js/<path:filename>")
+    def serve_js(filename):
+        return send_from_directory(os.path.join(FRONTEND_DIR, "js"), filename)
 
 
 # ══════════════════════════════════════════════

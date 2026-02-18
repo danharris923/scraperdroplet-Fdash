@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deal Viewer — Scraper Dashboard</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <!-- Favicon: shopping bag emoji -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128722;</text></svg>">
+</head>
+<body>
+
+    <!-- ═══════════════════════════════════════
+         HEADER
+         ═══════════════════════════════════════ -->
+    <header class="app-header">
+        <div class="header-left">
+            <button id="sidebar-toggle" class="header-btn" title="Toggle filters">&#9776;</button>
+            <span class="app-logo">Deal Viewer</span>
+            <span class="app-subtitle">Scraper Dashboard</span>
+        </div>
+        <div class="header-right">
+            <button id="auto-refresh-toggle" class="header-btn" title="Auto-refresh (60s)">&#8635; Auto</button>
+            <button class="header-btn" onclick="TableManager.exportCsv()" title="Export CSV">&#8615; CSV</button>
+            <button class="header-btn" onclick="TableManager.loadProducts()" title="Refresh (R)">&#8635; Refresh</button>
+        </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════
+         STATS BAR
+         ═══════════════════════════════════════ -->
+    <div class="stats-bar">
+        <div class="stat-item">
+            <span>Products</span>
+            <span class="stat-value" id="stat-total">—</span>
+        </div>
+        <div class="stat-item">
+            <span>Stores</span>
+            <span class="stat-value" id="stat-stores">—</span>
+        </div>
+        <div class="stat-item">
+            <span>Added Today</span>
+            <span class="stat-value" id="stat-today">—</span>
+        </div>
+        <div class="stat-item">
+            <span>On Sale</span>
+            <span class="stat-value" id="stat-sale">—</span>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         TABS (Products / Price Tracker)
+         ═══════════════════════════════════════ -->
+    <div class="tabs-bar">
+        <button class="tab-btn active" data-tab="products">Products</button>
+        <button class="tab-btn" data-tab="price-tracker">Price Tracker</button>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         BODY: Sidebar + Main Content
+         ═══════════════════════════════════════ -->
+    <div class="app-body">
+
+        <!-- ── Filter Sidebar ──────────────── -->
+        <aside class="filter-sidebar" id="filter-sidebar">
+            <div class="sidebar-header">
+                <span class="sidebar-title">Filters</span>
+                <button class="sidebar-clear" onclick="FilterManager.clearAll()">Clear All</button>
+            </div>
+            <div id="filter-sidebar-content">
+                <!-- Rendered by FilterManager.render() -->
+            </div>
+        </aside>
+
+        <!-- ── Main Content ────────────────── -->
+        <main class="main-content">
+
+            <!-- Products Tab -->
+            <div id="products-tab">
+                <!-- Active filter badges -->
+                <div id="active-filters" class="active-filters"></div>
+
+                <!-- Results info bar -->
+                <div class="results-bar">
+                    <div id="results-info"></div>
+                </div>
+
+                <!-- Product Table -->
+                <div class="table-container">
+                    <table class="product-table">
+                        <thead>
+                            <tr>
+                                <th class="col-image"></th>
+                                <th class="col-title">Product</th>
+                                <th class="col-price">Price</th>
+                                <th class="col-discount">Discount</th>
+                                <th class="col-category">Category</th>
+                                <th class="col-region">Region</th>
+                                <th class="col-time">Updated</th>
+                                <th class="col-link"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="product-table-body">
+                            <!-- Rendered by TableManager -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div id="pagination" class="pagination"></div>
+            </div>
+
+            <!-- Price Tracker Tab (hidden by default) -->
+            <div id="price-tracker-tab" style="display: none;">
+                <div id="price-tracker-content">
+                    <!-- Rendered by TableManager.loadPriceTracker() -->
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         KEYBOARD SHORTCUTS FOOTER
+         ═══════════════════════════════════════ -->
+    <footer class="shortcuts-bar">
+        <span><span class="shortcut-key">/</span> Search</span>
+        <span><span class="shortcut-key">&#8592;</span><span class="shortcut-key">&#8594;</span> Pages</span>
+        <span><span class="shortcut-key">Esc</span> Close</span>
+        <span><span class="shortcut-key">R</span> Refresh</span>
+        <span><span class="shortcut-key">E</span> Export CSV</span>
+    </footer>
+
+    <!-- ═══════════════════════════════════════
+         PRODUCT DETAIL MODAL
+         ═══════════════════════════════════════ -->
+    <div id="product-modal" class="modal-overlay">
+        <div class="modal-box">
+            <button id="modal-close" class="modal-close" title="Close (Esc)">&times;</button>
+            <div class="modal-body" id="modal-content">
+                <!-- Rendered by TableManager.showDetail() -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         SCRIPTS (order matters: utils → api → filters → table → app)
+         ═══════════════════════════════════════ -->
+    <script src="/js/utils.js"></script>
+    <script src="/js/api.js"></script>
+    <script src="/js/filters.js"></script>
+    <script src="/js/table.js"></script>
+    <script src="/js/app.js"></script>
+
+</body>
+</html>
