@@ -708,15 +708,15 @@ input[type="date"] {
     word-break: break-word;
 }
 
-/* ── Welcome state — wireframe spider crawler data screen ── */
+/* ── Welcome state — aggressive wireframe spider crawler ── */
 .welcome-state {
-    padding: 40px 20px 60px;
-    background: radial-gradient(ellipse at center, rgba(34, 197, 94, 0.03) 0%, transparent 70%);
+    padding: 20px 20px 40px;
+    background: radial-gradient(ellipse at 50% 60%, rgba(34, 197, 94, 0.04) 0%, transparent 60%);
 }
 
 .welcome-graphic {
-    max-width: 380px;
-    margin: 0 auto 16px;
+    max-width: 560px;
+    margin: 0 auto 12px;
 }
 
 .spider-svg {
@@ -725,9 +725,9 @@ input[type="date"] {
     display: block;
 }
 
-/* Scan line sweeps down repeatedly */
+/* Scan line sweeps down — slow, ominous */
 .scan-line {
-    animation: scanSweep 4s ease-in-out infinite;
+    animation: scanSweep 5s ease-in-out infinite;
 }
 
 @keyframes scanSweep {
@@ -735,52 +735,94 @@ input[type="date"] {
     100% { transform: translateY(100%); }
 }
 
-/* Eyes blink/pulse */
-.eye-blink {
-    animation: eyePulse 2.5s ease-in-out infinite;
+/* Main eyes — aggressive pulse */
+.eye-pulse {
+    animation: eyePulse 2s ease-in-out infinite;
 }
 
 @keyframes eyePulse {
-    0%, 100% { opacity: 0.9; }
-    50%      { opacity: 0.3; }
+    0%, 100% { opacity: 0.95; r: 5; }
+    40%      { opacity: 1; r: 6; }
+    60%      { opacity: 0.5; r: 4; }
 }
 
-/* Subtle leg movement — slight sway */
-.leg-r1, .leg-l1 { animation: legSway1 3s ease-in-out infinite; }
-.leg-r2, .leg-l2 { animation: legSway2 3.2s ease-in-out infinite; }
-.leg-r3, .leg-l3 { animation: legSway1 3.4s ease-in-out infinite; }
-.leg-r4, .leg-l4 { animation: legSway2 3.6s ease-in-out infinite; }
-
-@keyframes legSway1 {
-    0%, 100% { transform: translateY(0); }
-    50%      { transform: translateY(-2px); }
+/* Secondary eyes — offset pulse */
+.eye-pulse-alt {
+    animation: eyePulseAlt 2s ease-in-out infinite;
 }
 
-@keyframes legSway2 {
-    0%, 100% { transform: translateY(0); }
-    50%      { transform: translateY(2px); }
+@keyframes eyePulseAlt {
+    0%, 100% { opacity: 0.7; }
+    30%      { opacity: 0.4; }
+    70%      { opacity: 0.9; }
+}
+
+/* Leg sway — staggered, twitchy */
+.leg-r1, .leg-l1 { animation: legTwitch1 2.8s ease-in-out infinite; }
+.leg-r2, .leg-l2 { animation: legTwitch2 3.1s ease-in-out infinite; }
+.leg-r3, .leg-l3 { animation: legTwitch1 3.4s ease-in-out infinite; }
+.leg-r4, .leg-l4 { animation: legTwitch2 3.7s ease-in-out infinite; }
+
+@keyframes legTwitch1 {
+    0%, 100% { transform: translate(0, 0); }
+    25%      { transform: translate(-1px, -2px); }
+    75%      { transform: translate(1px, 1px); }
+}
+
+@keyframes legTwitch2 {
+    0%, 100% { transform: translate(0, 0); }
+    30%      { transform: translate(1px, -1px); }
+    60%      { transform: translate(-1px, 2px); }
+}
+
+/* Grid intersection sparks — flicker */
+.grid-sparks circle {
+    animation: sparkFlicker 1.5s ease-in-out infinite alternate;
+}
+
+.grid-sparks circle:nth-child(2) { animation-delay: 0.3s; }
+.grid-sparks circle:nth-child(3) { animation-delay: 0.6s; }
+.grid-sparks circle:nth-child(4) { animation-delay: 0.9s; }
+.grid-sparks circle:nth-child(5) { animation-delay: 1.2s; }
+
+@keyframes sparkFlicker {
+    0%   { opacity: 0.2; }
+    50%  { opacity: 0.8; }
+    100% { opacity: 0.3; }
+}
+
+/* Claw sparks — where legs hit the ground */
+.claw-sparks circle {
+    animation: clawSpark 2s ease-in-out infinite;
+}
+
+.claw-sparks circle:nth-child(odd) { animation-delay: 0.5s; }
+
+@keyframes clawSpark {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 1; }
 }
 
 /* HUD text blink */
 .hud-blink {
-    animation: hudBlink 1.5s steps(1) infinite;
+    animation: hudBlink 1.2s steps(1) infinite;
 }
 
 @keyframes hudBlink {
-    0%, 60%  { opacity: 0.4; }
-    61%, 90% { opacity: 0; }
-    91%      { opacity: 0.4; }
+    0%, 55% { opacity: 0.35; }
+    56%, 85% { opacity: 0; }
+    86%      { opacity: 0.35; }
 }
 
-/* Spider body breathe — subtle scale pulse */
+/* Spider body — slow menacing breathe */
 .spider-body {
-    transform-origin: 200px 140px;
-    animation: bodyBreathe 3s ease-in-out infinite;
+    transform-origin: 300px 150px;
+    animation: bodyBreathe 4s ease-in-out infinite;
 }
 
 @keyframes bodyBreathe {
     0%, 100% { transform: scale(1); }
-    50%      { transform: scale(1.015); }
+    50%      { transform: scale(1.02); }
 }
 
 .welcome-title {
@@ -789,15 +831,16 @@ input[type="date"] {
     color: #22c55e;
     margin-top: 4px;
     font-weight: 600;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
     text-transform: uppercase;
+    text-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
 }
 
 .welcome-hint {
     font-family: monospace;
     font-size: 0.78rem;
     color: #22c55e;
-    opacity: 0.45;
+    opacity: 0.4;
     margin-top: 6px;
     letter-spacing: 0.5px;
 }

@@ -187,132 +187,200 @@ const TableManager = {
             tbody.innerHTML = `
                 <tr><td colspan="8" class="empty-state welcome-state">
                     <div class="welcome-graphic">
-                        <svg viewBox="0 0 400 300" class="spider-svg" xmlns="http://www.w3.org/2000/svg">
-                            <!-- Background grid — data screen look -->
+                        <svg viewBox="0 0 600 400" class="spider-svg" xmlns="http://www.w3.org/2000/svg">
                             <defs>
-                                <filter id="glow">
-                                    <feGaussianBlur stdDeviation="2" result="blur"/>
-                                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                                <!-- Heavy neon glow -->
+                                <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                                    <feGaussianBlur stdDeviation="3" result="b"/>
+                                    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
                                 </filter>
-                                <filter id="glow-strong">
-                                    <feGaussianBlur stdDeviation="4" result="blur"/>
-                                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                                <filter id="glow-heavy" x="-50%" y="-50%" width="200%" height="200%">
+                                    <feGaussianBlur stdDeviation="6" result="b"/>
+                                    <feFlood flood-color="#22c55e" flood-opacity="0.4" result="c"/>
+                                    <feComposite in="c" in2="b" operator="in" result="d"/>
+                                    <feMerge><feMergeNode in="d"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
                                 </filter>
-                                <!-- Scan line sweeping down -->
+                                <filter id="glow-eye" x="-100%" y="-100%" width="300%" height="300%">
+                                    <feGaussianBlur stdDeviation="8" result="b"/>
+                                    <feFlood flood-color="#22c55e" flood-opacity="0.6" result="c"/>
+                                    <feComposite in="c" in2="b" operator="in" result="d"/>
+                                    <feMerge><feMergeNode in="d"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+                                </filter>
+                                <!-- Scan line -->
                                 <linearGradient id="scanGrad" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="0%" stop-color="#22c55e" stop-opacity="0"/>
-                                    <stop offset="45%" stop-color="#22c55e" stop-opacity="0.08"/>
-                                    <stop offset="50%" stop-color="#22c55e" stop-opacity="0.15"/>
-                                    <stop offset="55%" stop-color="#22c55e" stop-opacity="0.08"/>
+                                    <stop offset="48%" stop-color="#22c55e" stop-opacity="0.06"/>
+                                    <stop offset="50%" stop-color="#22c55e" stop-opacity="0.18"/>
+                                    <stop offset="52%" stop-color="#22c55e" stop-opacity="0.06"/>
                                     <stop offset="100%" stop-color="#22c55e" stop-opacity="0"/>
                                 </linearGradient>
+                                <!-- Floor glow -->
+                                <radialGradient id="floorGlow" cx="50%" cy="100%" r="60%">
+                                    <stop offset="0%" stop-color="#22c55e" stop-opacity="0.08"/>
+                                    <stop offset="100%" stop-color="#22c55e" stop-opacity="0"/>
+                                </radialGradient>
                             </defs>
 
-                            <!-- Grid lines -->
-                            <g stroke="#22c55e" stroke-opacity="0.07" stroke-width="0.5">
-                                <line x1="0" y1="50" x2="400" y2="50"/>
-                                <line x1="0" y1="100" x2="400" y2="100"/>
-                                <line x1="0" y1="150" x2="400" y2="150"/>
-                                <line x1="0" y1="200" x2="400" y2="200"/>
-                                <line x1="0" y1="250" x2="400" y2="250"/>
-                                <line x1="80" y1="0" x2="80" y2="300"/>
-                                <line x1="160" y1="0" x2="160" y2="300"/>
-                                <line x1="240" y1="0" x2="240" y2="300"/>
-                                <line x1="320" y1="0" x2="320" y2="300"/>
+                            <!-- Black void background -->
+                            <rect width="600" height="400" fill="#050a05"/>
+
+                            <!-- Floor glow -->
+                            <rect width="600" height="400" fill="url(#floorGlow)"/>
+
+                            <!-- PERSPECTIVE GRID FLOOR — converges to vanishing point at (300, 180) -->
+                            <g stroke="#22c55e" fill="none" filter="url(#glow)">
+                                <!-- Radial lines from vanishing point to bottom -->
+                                <line x1="300" y1="180" x2="-60"  y2="400" stroke-opacity="0.2" stroke-width="0.8"/>
+                                <line x1="300" y1="180" x2="60"   y2="400" stroke-opacity="0.25" stroke-width="0.8"/>
+                                <line x1="300" y1="180" x2="150"  y2="400" stroke-opacity="0.3" stroke-width="1"/>
+                                <line x1="300" y1="180" x2="230"  y2="400" stroke-opacity="0.3" stroke-width="1"/>
+                                <line x1="300" y1="180" x2="300"  y2="400" stroke-opacity="0.35" stroke-width="1.2"/>
+                                <line x1="300" y1="180" x2="370"  y2="400" stroke-opacity="0.3" stroke-width="1"/>
+                                <line x1="300" y1="180" x2="450"  y2="400" stroke-opacity="0.3" stroke-width="1"/>
+                                <line x1="300" y1="180" x2="540"  y2="400" stroke-opacity="0.25" stroke-width="0.8"/>
+                                <line x1="300" y1="180" x2="660"  y2="400" stroke-opacity="0.2" stroke-width="0.8"/>
+                                <!-- Horizontal grid rows — closer together near vanishing point -->
+                                <line x1="180" y1="260" x2="420" y2="260" stroke-opacity="0.15" stroke-width="0.6"/>
+                                <line x1="130" y1="290" x2="470" y2="290" stroke-opacity="0.2" stroke-width="0.7"/>
+                                <line x1="80"  y1="320" x2="520" y2="320" stroke-opacity="0.25" stroke-width="0.8"/>
+                                <line x1="20"  y1="350" x2="580" y2="350" stroke-opacity="0.3" stroke-width="1"/>
+                                <line x1="-30" y1="380" x2="630" y2="380" stroke-opacity="0.35" stroke-width="1.2"/>
+                            </g>
+
+                            <!-- Grid intersection sparks -->
+                            <g fill="#22c55e" class="grid-sparks">
+                                <circle cx="300" cy="350" r="2" opacity="0.6" filter="url(#glow)"/>
+                                <circle cx="230" cy="350" r="1.5" opacity="0.4"/>
+                                <circle cx="370" cy="350" r="1.5" opacity="0.4"/>
+                                <circle cx="150" cy="380" r="2" opacity="0.5" filter="url(#glow)"/>
+                                <circle cx="450" cy="380" r="2" opacity="0.5" filter="url(#glow)"/>
                             </g>
 
                             <!-- Scan line sweep -->
-                            <rect class="scan-line" x="0" y="0" width="400" height="300" fill="url(#scanGrad)"/>
+                            <rect class="scan-line" x="0" y="0" width="600" height="400" fill="url(#scanGrad)"/>
 
-                            <!-- Ground plane — perspective grid -->
-                            <g stroke="#22c55e" stroke-opacity="0.12" stroke-width="0.5" filter="url(#glow)">
-                                <line x1="100" y1="280" x2="200" y2="210"/>
-                                <line x1="160" y1="280" x2="200" y2="210"/>
-                                <line x1="240" y1="280" x2="200" y2="210"/>
-                                <line x1="300" y1="280" x2="200" y2="210"/>
-                                <line x1="60" y1="250" x2="340" y2="250"/>
-                                <line x1="80" y1="265" x2="320" y2="265"/>
-                                <line x1="50" y1="280" x2="350" y2="280"/>
+                            <!-- ══════ SPIDER — massive, low angle, aggressive ══════ -->
+
+                            <!-- ABDOMEN — large rear section, chunky polygon -->
+                            <g class="spider-body" filter="url(#glow-heavy)">
+                                <polygon points="300,70 340,55 365,70 365,105 340,120 300,125 260,120 235,105 235,70 260,55"
+                                    fill="none" stroke="#22c55e" stroke-width="2.5" stroke-opacity="0.7"/>
+                                <!-- Inner wireframe detail on abdomen -->
+                                <polygon points="300,65 330,58 348,68 348,100 330,112 300,115 270,112 252,100 252,68 270,58"
+                                    fill="none" stroke="#22c55e" stroke-width="1" stroke-opacity="0.25"/>
+                                <!-- Spine line -->
+                                <line x1="300" y1="55" x2="300" y2="125" stroke="#22c55e" stroke-width="0.8" stroke-opacity="0.2"/>
+                                <line x1="235" y1="87" x2="365" y2="87" stroke="#22c55e" stroke-width="0.8" stroke-opacity="0.15"/>
+
+                                <!-- THORAX — connects to head, angular -->
+                                <polygon points="300,125 330,130 345,145 340,170 300,180 260,170 255,145 270,130"
+                                    fill="none" stroke="#22c55e" stroke-width="2.5" stroke-opacity="0.8"/>
+                                <!-- Inner thorax wireframe -->
+                                <polygon points="300,132 322,136 332,148 328,165 300,172 272,165 268,148 278,136"
+                                    fill="none" stroke="#22c55e" stroke-width="0.8" stroke-opacity="0.25"/>
+                                <!-- Cross struts -->
+                                <line x1="270" y1="130" x2="340" y2="170" stroke="#22c55e" stroke-width="0.6" stroke-opacity="0.15"/>
+                                <line x1="330" y1="130" x2="260" y2="170" stroke="#22c55e" stroke-width="0.6" stroke-opacity="0.15"/>
+
+                                <!-- HEAD — angular, aggressive, wide -->
+                                <polygon points="300,178 328,182 340,195 335,215 300,222 265,215 260,195 272,182"
+                                    fill="none" stroke="#22c55e" stroke-width="2.5" stroke-opacity="0.9"/>
+                                <!-- Brow ridge — angry V shape -->
+                                <polyline points="265,192 285,186 300,190 315,186 335,192"
+                                    fill="none" stroke="#22c55e" stroke-width="1.8" stroke-opacity="0.6"/>
+
+                                <!-- FANGS — sharp, pointing down -->
+                                <polyline points="280,218 274,240 278,248" fill="none" stroke="#22c55e" stroke-width="2.2" stroke-opacity="0.8" stroke-linejoin="round"/>
+                                <polyline points="320,218 326,240 322,248" fill="none" stroke="#22c55e" stroke-width="2.2" stroke-opacity="0.8" stroke-linejoin="round"/>
+                                <!-- Fang tips glow -->
+                                <circle cx="278" cy="248" r="2" fill="#22c55e" opacity="0.6" filter="url(#glow)"/>
+                                <circle cx="322" cy="248" r="2" fill="#22c55e" opacity="0.6" filter="url(#glow)"/>
                             </g>
 
-                            <!-- SPIDER BODY — hexagonal wireframe -->
-                            <g class="spider-body" filter="url(#glow)">
-                                <!-- Abdomen (rear hex) -->
-                                <polygon points="200,100 218,108 218,124 200,132 182,124 182,108"
-                                    fill="none" stroke="#22c55e" stroke-width="1.5" stroke-opacity="0.9"/>
-                                <!-- Inner abdomen detail -->
-                                <polygon points="200,106 210,110 210,122 200,126 190,122 190,110"
-                                    fill="none" stroke="#22c55e" stroke-width="0.7" stroke-opacity="0.4"/>
-
-                                <!-- Thorax (front hex, slightly forward/down) -->
-                                <polygon points="200,130 214,136 214,150 200,156 186,150 186,136"
-                                    fill="none" stroke="#22c55e" stroke-width="1.5" stroke-opacity="0.9"/>
-
-                                <!-- Head -->
-                                <polygon points="200,155 210,160 210,170 200,174 190,170 190,160"
-                                    fill="none" stroke="#22c55e" stroke-width="1.2" stroke-opacity="0.8"/>
-
-                                <!-- Eyes — glowing dots -->
-                                <circle cx="195" cy="163" r="2" fill="#22c55e" opacity="0.9" class="eye-blink"/>
-                                <circle cx="205" cy="163" r="2" fill="#22c55e" opacity="0.9" class="eye-blink"/>
-                                <!-- Eye glow halos -->
-                                <circle cx="195" cy="163" r="4" fill="none" stroke="#22c55e" stroke-width="0.5" opacity="0.3" class="eye-blink"/>
-                                <circle cx="205" cy="163" r="4" fill="none" stroke="#22c55e" stroke-width="0.5" opacity="0.3" class="eye-blink"/>
-
-                                <!-- Fangs / mandibles -->
-                                <line x1="194" y1="172" x2="190" y2="180" stroke="#22c55e" stroke-width="1" stroke-opacity="0.6"/>
-                                <line x1="206" y1="172" x2="210" y2="180" stroke="#22c55e" stroke-width="1" stroke-opacity="0.6"/>
+                            <!-- EYES — 4 glowing eyes, menacing cluster -->
+                            <g class="spider-eyes" filter="url(#glow-eye)">
+                                <!-- Main eyes (large) -->
+                                <circle cx="286" cy="198" r="5" fill="#22c55e" opacity="0.95" class="eye-pulse"/>
+                                <circle cx="314" cy="198" r="5" fill="#22c55e" opacity="0.95" class="eye-pulse"/>
+                                <!-- Secondary eyes (smaller, above) -->
+                                <circle cx="279" cy="190" r="3" fill="#22c55e" opacity="0.7" class="eye-pulse-alt"/>
+                                <circle cx="321" cy="190" r="3" fill="#22c55e" opacity="0.7" class="eye-pulse-alt"/>
+                                <!-- Eye highlights -->
+                                <circle cx="288" cy="196" r="1.5" fill="#fff" opacity="0.5"/>
+                                <circle cx="316" cy="196" r="1.5" fill="#fff" opacity="0.5"/>
                             </g>
 
-                            <!-- LEGS — angular poly wireframe, 4 per side -->
-                            <g class="spider-legs" stroke="#22c55e" stroke-width="1.2" fill="none" filter="url(#glow)">
-                                <!-- Right legs (top to bottom) -->
-                                <!-- R1: upper-right, reaching forward -->
-                                <polyline points="218,112 248,95 278,80 305,65" stroke-opacity="0.8" class="leg-r1"/>
-                                <circle cx="305" cy="65" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
-                                <!-- R2 -->
-                                <polyline points="218,120 255,115 285,120 310,130" stroke-opacity="0.7" class="leg-r2"/>
-                                <circle cx="310" cy="130" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
-                                <!-- R3 -->
-                                <polyline points="214,142 250,148 280,160 308,175" stroke-opacity="0.7" class="leg-r3"/>
-                                <circle cx="308" cy="175" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
-                                <!-- R4: rear leg reaching back -->
-                                <polyline points="214,148 245,165 270,190 290,215" stroke-opacity="0.6" class="leg-r4"/>
-                                <circle cx="290" cy="215" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
+                            <!-- LEGS — thick, angular, aggressive, reaching wide -->
+                            <g stroke="#22c55e" fill="none" stroke-linejoin="round" stroke-linecap="round" filter="url(#glow-heavy)">
+                                <!-- RIGHT LEGS — each has 3 segments: shoulder, forearm, claw -->
+                                <!-- R1: front-right, reaching forward and down -->
+                                <polyline class="leg-r1" points="340,140 390,110 440,80 480,30" stroke-width="2.8" stroke-opacity="0.9"/>
+                                <polyline points="480,30 495,18" stroke-width="2" stroke-opacity="0.7"/>
+                                <!-- R2: mid-front right -->
+                                <polyline class="leg-r2" points="345,155 400,145 460,140 520,115" stroke-width="2.5" stroke-opacity="0.8"/>
+                                <polyline points="520,115 540,108" stroke-width="1.8" stroke-opacity="0.6"/>
+                                <!-- R3: mid-rear right -->
+                                <polyline class="leg-r3" points="340,165 395,180 455,195 530,200" stroke-width="2.5" stroke-opacity="0.75"/>
+                                <polyline points="530,200 550,202" stroke-width="1.8" stroke-opacity="0.6"/>
+                                <!-- R4: rear right, sweeping back -->
+                                <polyline class="leg-r4" points="330,125 375,140 430,175 490,240" stroke-width="2.2" stroke-opacity="0.65"/>
+                                <polyline points="490,240 505,260" stroke-width="1.5" stroke-opacity="0.5"/>
 
-                                <!-- Left legs (mirrored) -->
+                                <!-- LEFT LEGS — mirrored -->
                                 <!-- L1 -->
-                                <polyline points="182,112 152,95 122,80 95,65" stroke-opacity="0.8" class="leg-l1"/>
-                                <circle cx="95" cy="65" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
+                                <polyline class="leg-l1" points="260,140 210,110 160,80 120,30" stroke-width="2.8" stroke-opacity="0.9"/>
+                                <polyline points="120,30 105,18" stroke-width="2" stroke-opacity="0.7"/>
                                 <!-- L2 -->
-                                <polyline points="182,120 145,115 115,120 90,130" stroke-opacity="0.7" class="leg-l2"/>
-                                <circle cx="90" cy="130" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
+                                <polyline class="leg-l2" points="255,155 200,145 140,140 80,115" stroke-width="2.5" stroke-opacity="0.8"/>
+                                <polyline points="80,115 60,108" stroke-width="1.8" stroke-opacity="0.6"/>
                                 <!-- L3 -->
-                                <polyline points="186,142 150,148 120,160 92,175" stroke-opacity="0.7" class="leg-l3"/>
-                                <circle cx="92" cy="175" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
+                                <polyline class="leg-l3" points="260,165 205,180 145,195 70,200" stroke-width="2.5" stroke-opacity="0.75"/>
+                                <polyline points="70,200 50,202" stroke-width="1.8" stroke-opacity="0.6"/>
                                 <!-- L4 -->
-                                <polyline points="186,148 155,165 130,190 110,215" stroke-opacity="0.6" class="leg-l4"/>
-                                <circle cx="110" cy="215" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
+                                <polyline class="leg-l4" points="270,125 225,140 170,175 110,240" stroke-width="2.2" stroke-opacity="0.65"/>
+                                <polyline points="110,240 95,260" stroke-width="1.5" stroke-opacity="0.5"/>
                             </g>
 
-                            <!-- Joint dots at leg bends -->
-                            <g fill="#22c55e" fill-opacity="0.35">
-                                <circle cx="248" cy="95" r="1.5"/><circle cx="278" cy="80" r="1.5"/>
-                                <circle cx="255" cy="115" r="1.5"/><circle cx="285" cy="120" r="1.5"/>
-                                <circle cx="250" cy="148" r="1.5"/><circle cx="280" cy="160" r="1.5"/>
-                                <circle cx="245" cy="165" r="1.5"/><circle cx="270" cy="190" r="1.5"/>
-                                <circle cx="152" cy="95" r="1.5"/><circle cx="122" cy="80" r="1.5"/>
-                                <circle cx="145" cy="115" r="1.5"/><circle cx="115" cy="120" r="1.5"/>
-                                <circle cx="150" cy="148" r="1.5"/><circle cx="120" cy="160" r="1.5"/>
-                                <circle cx="155" cy="165" r="1.5"/><circle cx="130" cy="190" r="1.5"/>
+                            <!-- LEG JOINTS — bright dots at bends -->
+                            <g fill="#22c55e" filter="url(#glow)">
+                                <!-- Right joints -->
+                                <circle cx="390" cy="110" r="3" opacity="0.7"/>
+                                <circle cx="440" cy="80"  r="2.5" opacity="0.5"/>
+                                <circle cx="400" cy="145" r="2.5" opacity="0.6"/>
+                                <circle cx="460" cy="140" r="2" opacity="0.4"/>
+                                <circle cx="395" cy="180" r="2.5" opacity="0.5"/>
+                                <circle cx="455" cy="195" r="2" opacity="0.4"/>
+                                <circle cx="375" cy="140" r="2" opacity="0.45"/>
+                                <circle cx="430" cy="175" r="2" opacity="0.4"/>
+                                <!-- Left joints -->
+                                <circle cx="210" cy="110" r="3" opacity="0.7"/>
+                                <circle cx="160" cy="80"  r="2.5" opacity="0.5"/>
+                                <circle cx="200" cy="145" r="2.5" opacity="0.6"/>
+                                <circle cx="140" cy="140" r="2" opacity="0.4"/>
+                                <circle cx="205" cy="180" r="2.5" opacity="0.5"/>
+                                <circle cx="145" cy="195" r="2" opacity="0.4"/>
+                                <circle cx="225" cy="140" r="2" opacity="0.45"/>
+                                <circle cx="170" cy="175" r="2" opacity="0.4"/>
                             </g>
 
-                            <!-- Data readout text — bottom-right HUD style -->
-                            <g class="hud-text" fill="#22c55e" font-family="monospace" font-size="9" opacity="0.4">
-                                <text x="290" y="260">CRAWLER:ACTIVE</text>
-                                <text x="290" y="272">AWAITING TARGET</text>
-                                <text x="20" y="260" class="hud-blink">SYS:READY</text>
-                                <text x="20" y="272">FILTERS:NONE</text>
+                            <!-- Claw tip sparks — where legs meet the ground -->
+                            <g fill="#22c55e" class="claw-sparks">
+                                <circle cx="495" cy="18"  r="2.5" opacity="0.8" filter="url(#glow-heavy)"/>
+                                <circle cx="540" cy="108" r="2" opacity="0.6" filter="url(#glow)"/>
+                                <circle cx="550" cy="202" r="2" opacity="0.6" filter="url(#glow)"/>
+                                <circle cx="505" cy="260" r="2" opacity="0.5" filter="url(#glow)"/>
+                                <circle cx="105" cy="18"  r="2.5" opacity="0.8" filter="url(#glow-heavy)"/>
+                                <circle cx="60"  cy="108" r="2" opacity="0.6" filter="url(#glow)"/>
+                                <circle cx="50"  cy="202" r="2" opacity="0.6" filter="url(#glow)"/>
+                                <circle cx="95"  cy="260" r="2" opacity="0.5" filter="url(#glow)"/>
+                            </g>
+
+                            <!-- HUD readout -->
+                            <g fill="#22c55e" font-family="monospace" font-size="10" opacity="0.35">
+                                <text x="440" y="370">STATUS: HUNTING</text>
+                                <text x="440" y="384" class="hud-blink">TARGET: UNSET</text>
+                                <text x="30" y="370">CRAWLER v3.1</text>
+                                <text x="30" y="384">AWAITING FILTERS</text>
                             </g>
                         </svg>
                     </div>
