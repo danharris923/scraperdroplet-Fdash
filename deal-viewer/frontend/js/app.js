@@ -20,16 +20,28 @@ const App = {
         const start = performance.now();
 
         // Wire up FilterManager → TableManager
-        FilterManager.onChange = () => TableManager.loadProducts();
+        // Only load products when at least one filter is active; otherwise show welcome
+        FilterManager.onChange = () => {
+            if (FilterManager.activeCount() > 0) {
+                TableManager.loadProducts();
+            } else {
+                TableManager.showWelcome();
+            }
+        };
 
         // Initialize filters (loads options from API, renders sidebar)
         await FilterManager.init();
 
-        // Load initial data in parallel
-        await Promise.all([
-            TableManager.loadProducts(),
-            this.loadStats(),
-        ]);
+        // Show welcome state or load products if URL already has filters
+        if (FilterManager.activeCount() > 0) {
+            await Promise.all([
+                TableManager.loadProducts(),
+                this.loadStats(),
+            ]);
+        } else {
+            TableManager.showWelcome();
+            await this.loadStats();
+        }
 
         // Set up event listeners
         this._setupTabs();
@@ -44,7 +56,12 @@ const App = {
             Object.assign(FilterManager.state, urlFilters);
             FilterManager.render();
             FilterManager.renderActiveBadges();
-            TableManager.loadProducts();
+            // Only fetch products if at least one filter is active
+            if (FilterManager.activeCount() > 0) {
+                TableManager.loadProducts();
+            } else {
+                TableManager.showWelcome();
+            }
         });
 
         const elapsed = performance.now() - start;

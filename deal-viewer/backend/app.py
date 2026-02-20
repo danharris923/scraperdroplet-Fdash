@@ -104,24 +104,32 @@ def normalize_retailer(row):
     image_url = images[0] if images else (thumbnail if thumbnail and "LogoMobile" not in thumbnail else None)
 
     # Derive store/source from retailer_sku or affiliate_url
+    # Source values are LOWERCASE to match filter system values exactly
     store = "Unknown"
-    source = "Flipp"
+    source = "flipp"  # default source — Flipp flyer data
 
     sku = row.get("retailer_sku") or ""
     if "_" in sku:
         store = sku.split("_")[0]
+        # Also set source based on store name from the sku
+        store_lower = store.lower()
+        if "amazon" in store_lower:
+            source = "amazon"
+        elif "leons" in store_lower:
+            source = "leons"
+        # else stays "flipp" (default)
     elif row.get("affiliate_url"):
         try:
             parsed = urlparse(row["affiliate_url"])
             hostname = parsed.hostname.replace("www.", "") if parsed.hostname else ""
             if "amazon" in hostname:
-                store, source = "Amazon", "Amazon"
+                store, source = "Amazon", "amazon"  # matches "amazon" filter value
             elif "leons" in hostname:
-                store, source = "Leons", "Leons"
+                store, source = "Leon's", "leons"  # matches "leons" filter value
             else:
                 domain = hostname.split(".")[0]
                 store = domain.capitalize()
-                source = store
+                source = "flipp"  # non-amazon/leons retailer products are Flipp flyer deals
         except Exception:
             pass
 
@@ -274,13 +282,23 @@ def get_filters():
             log_warning(f"Count failed for {table['name']}: {e}")
             counts[table["name"]] = 0
 
-    # Retailer products (excluding CocoPriceTracker)
+    # Retailer products (excluding CocoPriceTracker) — split into Amazon vs Flipp
     try:
+        # Total retailer (non-cocoprice)
         result = sb.table("retailer_products").select("id", count="exact").not_contains("extra_data", {"source": "cocopricetracker.ca"}).limit(0).execute()
         counts["retailer_products"] = result.count or 0
+
+        # Amazon subset — products with amazon in the affiliate_url
+        result = sb.table("retailer_products").select("id", count="exact").not_contains("extra_data", {"source": "cocopricetracker.ca"}).ilike("affiliate_url", "%amazon%").limit(0).execute()
+        counts["retailer_amazon"] = result.count or 0
+
+        # Flipp = everything else in retailer_products (non-Amazon, non-CocoPriceTracker)
+        counts["retailer_flipp"] = max(0, counts["retailer_products"] - counts["retailer_amazon"])
     except Exception as e:
         log_warning(f"Count failed for retailer_products: {e}")
         counts["retailer_products"] = 0
+        counts["retailer_amazon"] = 0
+        counts["retailer_flipp"] = 0
 
     # Costco user photos — by source
     for costco_source in ["cocowest", "warehouse_runner"]:
@@ -300,41 +318,53 @@ def get_filters():
         counts["cocopricetracker"] = 0
 
     # ── Build sources by category ──
+    # Four groups that make sense: aggregators, amazon, store scrapers, costco
     sources_by_category = {
-        "aggregators": [],
-        "retailers": [],
+        "dealAggregators": [],
+        "amazon": [],
+        "storeScrapers": [],
         "costcoTrackers": [],
     }
 
-    # Aggregators
+    # Deal Aggregators — sites/feeds that collect deals from many stores
     if counts.get("deals", 0) > 0:
-        sources_by_category["aggregators"].append({"value": "rfd", "label": "RedFlagDeals", "count": counts["deals"]})
+        sources_by_category["dealAggregators"].append({"value": "rfd", "label": "RedFlagDeals", "count": counts["deals"]})
+    if counts.get("yepsavings_deals", 0) > 0:
+        sources_by_category["dealAggregators"].append({"value": "yepsavings", "label": "YepSavings", "count": counts["yepsavings_deals"]})
+    if counts.get("retailer_flipp", 0) > 0:
+        sources_by_category["dealAggregators"].append({"value": "flipp", "label": "Flipp Flyers", "count": counts["retailer_flipp"]})
 
-    # Retailers
-    retailer_sources = [
-        ("retailer_products", "amazon", "Amazon (Keepa)"),
-        ("amazon_ca_deals",   "amazon_ca", "Amazon CA"),
-        ("cabelas_ca_deals",  "cabelas_ca", "Cabela's"),
-        ("frank_and_oak_deals", "frank_and_oak", "Frank And Oak"),
-        ("leons_deals",       "leons", "Leon's"),
-        ("mastermind_toys_deals", "mastermind_toys", "Mastermind Toys"),
-        ("reebok_ca_deals",   "reebok_ca", "Reebok CA"),
-        ("the_brick_deals",   "the_brick", "The Brick"),
-        ("yepsavings_deals",  "yepsavings", "YepSavings"),
+    # Amazon — dedicated Amazon scrapers and price trackers
+    if counts.get("amazon_ca_deals", 0) > 0:
+        sources_by_category["amazon"].append({"value": "amazon_ca", "label": "Amazon.ca Deals", "count": counts["amazon_ca_deals"]})
+    if counts.get("retailer_amazon", 0) > 0:
+        sources_by_category["amazon"].append({"value": "amazon", "label": "Amazon Price Tracker", "count": counts["retailer_amazon"]})
+
+    # Store Scrapers — individual retailer scrapers
+    store_scraper_sources = [
+        ("cabelas_ca_deals",       "cabelas_ca",      "Cabela's Canada"),
+        ("frank_and_oak_deals",    "frank_and_oak",    "Frank & Oak"),
+        ("leons_deals",            "leons",            "Leon's"),
+        ("mastermind_toys_deals",  "mastermind_toys",  "Mastermind Toys"),
+        ("reebok_ca_deals",        "reebok_ca",        "Reebok Canada"),
+        ("the_brick_deals",        "the_brick",        "The Brick"),
     ]
-    for table_key, value, label in retailer_sources:
+    for table_key, value, label in store_scraper_sources:
         c = counts.get(table_key, 0)
         if c > 0:
-            sources_by_category["retailers"].append({"value": value, "label": label, "count": c})
+            sources_by_category["storeScrapers"].append({"value": value, "label": label, "count": c})
 
-    # Costco trackers
-    sources_by_category["costcoTrackers"].append({"value": "cocowest", "label": "CocoWest (Canada)", "count": counts.get("cocowest", 0)})
-    sources_by_category["costcoTrackers"].append({"value": "warehouse_runner", "label": "WarehouseRunner (USA)", "count": counts.get("warehouse_runner", 0)})
-    sources_by_category["costcoTrackers"].append({"value": "cocopricetracker", "label": "CocoPriceTracker", "count": counts.get("cocopricetracker", 0)})
+    # Costco Trackers
+    if counts.get("cocowest", 0) > 0:
+        sources_by_category["costcoTrackers"].append({"value": "cocowest", "label": "CocoWest (Canada)", "count": counts.get("cocowest", 0)})
+    if counts.get("warehouse_runner", 0) > 0:
+        sources_by_category["costcoTrackers"].append({"value": "warehouse_runner", "label": "WarehouseRunner (USA)", "count": counts.get("warehouse_runner", 0)})
+    if counts.get("cocopricetracker", 0) > 0:
+        sources_by_category["costcoTrackers"].append({"value": "cocopricetracker", "label": "CocoPriceTracker", "count": counts.get("cocopricetracker", 0)})
 
     # Flat sources list with counts in label
     all_sources = []
-    for cat in ["aggregators", "retailers", "costcoTrackers"]:
+    for cat in ["dealAggregators", "amazon", "storeScrapers", "costcoTrackers"]:
         for s in sources_by_category[cat]:
             all_sources.append({"value": s["value"], "label": f"{s['label']} ({s['count']:,})", "count": s["count"]})
 
@@ -411,8 +441,9 @@ def get_filters():
             "categories": len(categories),
             "totalProducts": grand_total,
             "byCategory": {
-                "aggregators": sum(s["count"] for s in sources_by_category["aggregators"]),
-                "retailers": sum(s["count"] for s in sources_by_category["retailers"]),
+                "dealAggregators": sum(s["count"] for s in sources_by_category["dealAggregators"]),
+                "amazon": sum(s["count"] for s in sources_by_category["amazon"]),
+                "storeScrapers": sum(s["count"] for s in sources_by_category["storeScrapers"]),
                 "costcoTrackers": costco_total,
             },
         },
@@ -578,10 +609,10 @@ def get_products():
         if sources:
             if table["source"] and table["source"] not in sources:
                 continue
-            # For main deals table, check if any source matches
+            # The main deals table IS RedFlagDeals — only include when "rfd" is selected.
+            # Don't include it for "amazon"/"flipp"/etc, those have their own dedicated tables.
             if table["name"] == "deals":
-                deal_sources = [s for s in sources if s.lower() in ("rfd", "flipp", "amazon", "costco", "deals")]
-                if not deal_sources and not any("deal" in s.lower() for s in sources):
+                if "rfd" not in [s.lower() for s in sources]:
                     continue
 
         try:
@@ -618,6 +649,7 @@ def get_products():
             log_warning(f"Query failed for {table['name']}: {e}")
 
     # ── Query retailer_products (excluding CocoPriceTracker) ──
+    # Include if no source filter, or if any retailer-relevant source is selected
     include_retailer = not sources or any(s.lower() in ("amazon", "leons", "retailer", "flipp") for s in sources)
     if include_retailer:
         try:
@@ -647,10 +679,20 @@ def get_products():
 
             result = query.order("first_seen_at", desc=not ascending).limit(fetch_limit).execute()
 
-            for row in (result.data or []):
-                all_products.append(normalize_retailer(row))
+            # Normalize all retailer rows
+            retailer_normalized = [normalize_retailer(row) for row in (result.data or [])]
 
-            log_debug(f"  retailer_products: {len(result.data or [])} rows")
+            # POST-FILTER by source — this is the critical fix!
+            # Without this, selecting "amazon" pulls in ALL Flipp products too.
+            if sources:
+                source_lower = {s.lower() for s in sources}
+                retailer_normalized = [
+                    p for p in retailer_normalized
+                    if p.get("source", "").lower() in source_lower
+                ]
+
+            all_products.extend(retailer_normalized)
+            log_debug(f"  retailer_products: {len(result.data or [])} fetched, {len(retailer_normalized)} after source filter")
         except Exception as e:
             log_warning(f"Query failed for retailer_products: {e}")
 

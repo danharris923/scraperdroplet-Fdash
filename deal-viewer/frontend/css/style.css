@@ -708,6 +708,100 @@ input[type="date"] {
     word-break: break-word;
 }
 
+/* ── Welcome state — wireframe spider crawler data screen ── */
+.welcome-state {
+    padding: 40px 20px 60px;
+    background: radial-gradient(ellipse at center, rgba(34, 197, 94, 0.03) 0%, transparent 70%);
+}
+
+.welcome-graphic {
+    max-width: 380px;
+    margin: 0 auto 16px;
+}
+
+.spider-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* Scan line sweeps down repeatedly */
+.scan-line {
+    animation: scanSweep 4s ease-in-out infinite;
+}
+
+@keyframes scanSweep {
+    0%   { transform: translateY(-100%); }
+    100% { transform: translateY(100%); }
+}
+
+/* Eyes blink/pulse */
+.eye-blink {
+    animation: eyePulse 2.5s ease-in-out infinite;
+}
+
+@keyframes eyePulse {
+    0%, 100% { opacity: 0.9; }
+    50%      { opacity: 0.3; }
+}
+
+/* Subtle leg movement — slight sway */
+.leg-r1, .leg-l1 { animation: legSway1 3s ease-in-out infinite; }
+.leg-r2, .leg-l2 { animation: legSway2 3.2s ease-in-out infinite; }
+.leg-r3, .leg-l3 { animation: legSway1 3.4s ease-in-out infinite; }
+.leg-r4, .leg-l4 { animation: legSway2 3.6s ease-in-out infinite; }
+
+@keyframes legSway1 {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-2px); }
+}
+
+@keyframes legSway2 {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(2px); }
+}
+
+/* HUD text blink */
+.hud-blink {
+    animation: hudBlink 1.5s steps(1) infinite;
+}
+
+@keyframes hudBlink {
+    0%, 60%  { opacity: 0.4; }
+    61%, 90% { opacity: 0; }
+    91%      { opacity: 0.4; }
+}
+
+/* Spider body breathe — subtle scale pulse */
+.spider-body {
+    transform-origin: 200px 140px;
+    animation: bodyBreathe 3s ease-in-out infinite;
+}
+
+@keyframes bodyBreathe {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.015); }
+}
+
+.welcome-title {
+    font-family: monospace;
+    font-size: 1.1rem;
+    color: #22c55e;
+    margin-top: 4px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.welcome-hint {
+    font-family: monospace;
+    font-size: 0.78rem;
+    color: #22c55e;
+    opacity: 0.45;
+    margin-top: 6px;
+    letter-spacing: 0.5px;
+}
+
 /* ── Loading spinner ──────────────────── */
 .spinner {
     width: 32px;

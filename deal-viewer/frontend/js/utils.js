@@ -118,15 +118,16 @@ const Utils = {
         return 'discount-ok';
     },
 
-    // ── Source display name ──
+    // ── Source display name — matches SOURCE_LABELS in config.py ──
     sourceLabel(source) {
         const labels = {
-            'rfd': 'RedFlagDeals', 'amazon': 'Amazon (Keepa)', 'amazon_ca': 'Amazon CA',
-            'cabelas_ca': "Cabela's", 'frank_and_oak': 'Frank And Oak', 'leons': "Leon's",
-            'mastermind_toys': 'Mastermind Toys', 'reebok_ca': 'Reebok CA',
-            'the_brick': 'The Brick', 'yepsavings': 'YepSavings',
-            'cocowest': 'CocoWest', 'warehouse_runner': 'WarehouseRunner',
-            'cocopricetracker': 'CocoPriceTracker', 'flipp': 'Flipp',
+            'rfd': 'RedFlagDeals', 'yepsavings': 'YepSavings', 'flipp': 'Flipp Flyers',
+            'amazon_ca': 'Amazon.ca Deals', 'amazon': 'Amazon Price Tracker',
+            'cabelas_ca': "Cabela's Canada", 'frank_and_oak': 'Frank & Oak', 'leons': "Leon's",
+            'mastermind_toys': 'Mastermind Toys', 'reebok_ca': 'Reebok Canada',
+            'the_brick': 'The Brick',
+            'cocowest': 'CocoWest (Canada)', 'warehouse_runner': 'WarehouseRunner (USA)',
+            'cocopricetracker': 'CocoPriceTracker',
         };
         return labels[source] || source;
     },

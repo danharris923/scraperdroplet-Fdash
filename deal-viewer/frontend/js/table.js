@@ -178,6 +178,156 @@ const TableManager = {
     },
 
     /**
+     * Show the initial welcome state — wireframe spider crawler on a data screen.
+     * No products loaded yet, prompt user to pick filters.
+     */
+    showWelcome() {
+        const tbody = document.getElementById('product-table-body');
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr><td colspan="8" class="empty-state welcome-state">
+                    <div class="welcome-graphic">
+                        <svg viewBox="0 0 400 300" class="spider-svg" xmlns="http://www.w3.org/2000/svg">
+                            <!-- Background grid — data screen look -->
+                            <defs>
+                                <filter id="glow">
+                                    <feGaussianBlur stdDeviation="2" result="blur"/>
+                                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                                </filter>
+                                <filter id="glow-strong">
+                                    <feGaussianBlur stdDeviation="4" result="blur"/>
+                                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                                </filter>
+                                <!-- Scan line sweeping down -->
+                                <linearGradient id="scanGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#22c55e" stop-opacity="0"/>
+                                    <stop offset="45%" stop-color="#22c55e" stop-opacity="0.08"/>
+                                    <stop offset="50%" stop-color="#22c55e" stop-opacity="0.15"/>
+                                    <stop offset="55%" stop-color="#22c55e" stop-opacity="0.08"/>
+                                    <stop offset="100%" stop-color="#22c55e" stop-opacity="0"/>
+                                </linearGradient>
+                            </defs>
+
+                            <!-- Grid lines -->
+                            <g stroke="#22c55e" stroke-opacity="0.07" stroke-width="0.5">
+                                <line x1="0" y1="50" x2="400" y2="50"/>
+                                <line x1="0" y1="100" x2="400" y2="100"/>
+                                <line x1="0" y1="150" x2="400" y2="150"/>
+                                <line x1="0" y1="200" x2="400" y2="200"/>
+                                <line x1="0" y1="250" x2="400" y2="250"/>
+                                <line x1="80" y1="0" x2="80" y2="300"/>
+                                <line x1="160" y1="0" x2="160" y2="300"/>
+                                <line x1="240" y1="0" x2="240" y2="300"/>
+                                <line x1="320" y1="0" x2="320" y2="300"/>
+                            </g>
+
+                            <!-- Scan line sweep -->
+                            <rect class="scan-line" x="0" y="0" width="400" height="300" fill="url(#scanGrad)"/>
+
+                            <!-- Ground plane — perspective grid -->
+                            <g stroke="#22c55e" stroke-opacity="0.12" stroke-width="0.5" filter="url(#glow)">
+                                <line x1="100" y1="280" x2="200" y2="210"/>
+                                <line x1="160" y1="280" x2="200" y2="210"/>
+                                <line x1="240" y1="280" x2="200" y2="210"/>
+                                <line x1="300" y1="280" x2="200" y2="210"/>
+                                <line x1="60" y1="250" x2="340" y2="250"/>
+                                <line x1="80" y1="265" x2="320" y2="265"/>
+                                <line x1="50" y1="280" x2="350" y2="280"/>
+                            </g>
+
+                            <!-- SPIDER BODY — hexagonal wireframe -->
+                            <g class="spider-body" filter="url(#glow)">
+                                <!-- Abdomen (rear hex) -->
+                                <polygon points="200,100 218,108 218,124 200,132 182,124 182,108"
+                                    fill="none" stroke="#22c55e" stroke-width="1.5" stroke-opacity="0.9"/>
+                                <!-- Inner abdomen detail -->
+                                <polygon points="200,106 210,110 210,122 200,126 190,122 190,110"
+                                    fill="none" stroke="#22c55e" stroke-width="0.7" stroke-opacity="0.4"/>
+
+                                <!-- Thorax (front hex, slightly forward/down) -->
+                                <polygon points="200,130 214,136 214,150 200,156 186,150 186,136"
+                                    fill="none" stroke="#22c55e" stroke-width="1.5" stroke-opacity="0.9"/>
+
+                                <!-- Head -->
+                                <polygon points="200,155 210,160 210,170 200,174 190,170 190,160"
+                                    fill="none" stroke="#22c55e" stroke-width="1.2" stroke-opacity="0.8"/>
+
+                                <!-- Eyes — glowing dots -->
+                                <circle cx="195" cy="163" r="2" fill="#22c55e" opacity="0.9" class="eye-blink"/>
+                                <circle cx="205" cy="163" r="2" fill="#22c55e" opacity="0.9" class="eye-blink"/>
+                                <!-- Eye glow halos -->
+                                <circle cx="195" cy="163" r="4" fill="none" stroke="#22c55e" stroke-width="0.5" opacity="0.3" class="eye-blink"/>
+                                <circle cx="205" cy="163" r="4" fill="none" stroke="#22c55e" stroke-width="0.5" opacity="0.3" class="eye-blink"/>
+
+                                <!-- Fangs / mandibles -->
+                                <line x1="194" y1="172" x2="190" y2="180" stroke="#22c55e" stroke-width="1" stroke-opacity="0.6"/>
+                                <line x1="206" y1="172" x2="210" y2="180" stroke="#22c55e" stroke-width="1" stroke-opacity="0.6"/>
+                            </g>
+
+                            <!-- LEGS — angular poly wireframe, 4 per side -->
+                            <g class="spider-legs" stroke="#22c55e" stroke-width="1.2" fill="none" filter="url(#glow)">
+                                <!-- Right legs (top to bottom) -->
+                                <!-- R1: upper-right, reaching forward -->
+                                <polyline points="218,112 248,95 278,80 305,65" stroke-opacity="0.8" class="leg-r1"/>
+                                <circle cx="305" cy="65" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
+                                <!-- R2 -->
+                                <polyline points="218,120 255,115 285,120 310,130" stroke-opacity="0.7" class="leg-r2"/>
+                                <circle cx="310" cy="130" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
+                                <!-- R3 -->
+                                <polyline points="214,142 250,148 280,160 308,175" stroke-opacity="0.7" class="leg-r3"/>
+                                <circle cx="308" cy="175" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
+                                <!-- R4: rear leg reaching back -->
+                                <polyline points="214,148 245,165 270,190 290,215" stroke-opacity="0.6" class="leg-r4"/>
+                                <circle cx="290" cy="215" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
+
+                                <!-- Left legs (mirrored) -->
+                                <!-- L1 -->
+                                <polyline points="182,112 152,95 122,80 95,65" stroke-opacity="0.8" class="leg-l1"/>
+                                <circle cx="95" cy="65" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
+                                <!-- L2 -->
+                                <polyline points="182,120 145,115 115,120 90,130" stroke-opacity="0.7" class="leg-l2"/>
+                                <circle cx="90" cy="130" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
+                                <!-- L3 -->
+                                <polyline points="186,142 150,148 120,160 92,175" stroke-opacity="0.7" class="leg-l3"/>
+                                <circle cx="92" cy="175" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
+                                <!-- L4 -->
+                                <polyline points="186,148 155,165 130,190 110,215" stroke-opacity="0.6" class="leg-l4"/>
+                                <circle cx="110" cy="215" r="1.5" fill="#22c55e" fill-opacity="0.5"/>
+                            </g>
+
+                            <!-- Joint dots at leg bends -->
+                            <g fill="#22c55e" fill-opacity="0.35">
+                                <circle cx="248" cy="95" r="1.5"/><circle cx="278" cy="80" r="1.5"/>
+                                <circle cx="255" cy="115" r="1.5"/><circle cx="285" cy="120" r="1.5"/>
+                                <circle cx="250" cy="148" r="1.5"/><circle cx="280" cy="160" r="1.5"/>
+                                <circle cx="245" cy="165" r="1.5"/><circle cx="270" cy="190" r="1.5"/>
+                                <circle cx="152" cy="95" r="1.5"/><circle cx="122" cy="80" r="1.5"/>
+                                <circle cx="145" cy="115" r="1.5"/><circle cx="115" cy="120" r="1.5"/>
+                                <circle cx="150" cy="148" r="1.5"/><circle cx="120" cy="160" r="1.5"/>
+                                <circle cx="155" cy="165" r="1.5"/><circle cx="130" cy="190" r="1.5"/>
+                            </g>
+
+                            <!-- Data readout text — bottom-right HUD style -->
+                            <g class="hud-text" fill="#22c55e" font-family="monospace" font-size="9" opacity="0.4">
+                                <text x="290" y="260">CRAWLER:ACTIVE</text>
+                                <text x="290" y="272">AWAITING TARGET</text>
+                                <text x="20" y="260" class="hud-blink">SYS:READY</text>
+                                <text x="20" y="272">FILTERS:NONE</text>
+                            </g>
+                        </svg>
+                    </div>
+                    <div class="welcome-title">Crawler standing by</div>
+                    <div class="welcome-hint">Select a source or set filters to deploy.</div>
+                </td></tr>`;
+        }
+        // Clear pagination and results info too
+        const pagination = document.getElementById('pagination');
+        if (pagination) pagination.innerHTML = '';
+        const info = document.getElementById('results-info');
+        if (info) info.innerHTML = '';
+    },
+
+    /**
      * Show loading spinner in table area.
      */
     _showLoading() {

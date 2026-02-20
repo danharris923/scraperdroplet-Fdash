@@ -286,23 +286,27 @@ DEAL_TABLES = [
     {"name": "yepsavings_deals",       "source": "yepsavings",      "date_col": "created_date", "title_col": "title", "store_col": "store_name"},
 ]
 
-# Source display names for human-readable labels
+# Source display names — human-readable labels for each scraper source.
+# These appear in the sidebar filter checkboxes and product cards.
 SOURCE_LABELS = {
+    # Deal aggregators — sites that collect deals from multiple stores
     "rfd": "RedFlagDeals",
-    "amazon": "Amazon (Keepa)",
-    "amazon_ca": "Amazon CA",
-    "cabelas_ca": "Cabela's",
-    "frank_and_oak": "Frank And Oak",
+    "yepsavings": "YepSavings",
+    "flipp": "Flipp Flyers",
+    # Amazon scrapers
+    "amazon_ca": "Amazon.ca Deals",       # our own Amazon.ca scraper ("bubble scraper")
+    "amazon": "Amazon Price Tracker",      # Keepa/Flipp Amazon price tracking data
+    # Individual store scrapers
+    "cabelas_ca": "Cabela's Canada",
+    "frank_and_oak": "Frank & Oak",
     "leons": "Leon's",
     "mastermind_toys": "Mastermind Toys",
-    "reebok_ca": "Reebok CA",
+    "reebok_ca": "Reebok Canada",
     "the_brick": "The Brick",
-    "yepsavings": "YepSavings",
+    # Costco trackers
     "cocowest": "CocoWest (Canada)",
     "warehouse_runner": "WarehouseRunner (USA)",
     "cocopricetracker": "CocoPriceTracker",
-    "flipp": "Flipp",
-    "retailer": "Retailer",
 }
 
 
