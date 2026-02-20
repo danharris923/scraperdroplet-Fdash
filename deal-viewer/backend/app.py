@@ -15,6 +15,7 @@ Endpoints:
 """
 
 import os
+import re
 import time
 import traceback
 from datetime import datetime, timedelta, timezone
@@ -88,14 +89,113 @@ def _calc_discount(current, original, stored_discount):
     return stored_discount or 0
 
 
+# Regex patterns for Amazon deal badge text that the scraper stores as titles
+# Examples: "75% offLimited-time deal", "60% offLightning Deal", "Limited-time deal"
+_BADGE_PREFIXES = re.compile(
+    r"^\d+%\s*off",   # "75% off" or "60%off" at start of title
+    re.IGNORECASE,
+)
+_BADGE_SUFFIXES = re.compile(
+    r"(Limited[- ]time deal|Lightning Deal|Best Seller|Prime Early Access|Deal of the Day|"
+    r"Climate Pledge Friendly|Amazon'?s?\s*Choice|Sponsored|Top Deal|Overall Pick)$",
+    re.IGNORECASE,
+)
+_JUNK_TITLE = re.compile(
+    r"^(\d+%\s*off)?\s*(Limited[- ]time deal|Lightning Deal|Deal of the Day|Top Deal|"
+    r"Best Seller|Sponsored|Overall Pick)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _clean_title(raw_title, row, table_name):
+    """
+    Clean up product titles — detects Amazon deal badge text that the scraper
+    mistakenly captures as the title (e.g. "75% offLimited-time deal") and
+    replaces it with something useful.
+
+    Fallback chain:
+      1. Strip badge prefix/suffix, keep remaining real title text
+      2. Use the brand field if present
+      3. Use ASIN from product_id or metadata
+      4. Use the URL domain + "Deal"
+    """
+    title = (raw_title or "").strip()
+
+    # Check if the entire title is junk (badge-only, nothing useful)
+    if not title or _JUNK_TITLE.match(title):
+        # Entire title is badge text — build a fallback title
+        return _fallback_title(row, table_name)
+
+    # Strip badge prefix: "75% offSome Real Product" → "Some Real Product"
+    cleaned = _BADGE_PREFIXES.sub("", title).strip()
+    # Strip badge suffix: "Real Product Limited-time deal" → "Real Product"
+    cleaned = _BADGE_SUFFIXES.sub("", cleaned).strip()
+
+    # If stripping left us with nothing useful (< 3 chars), use fallback
+    if len(cleaned) < 3:
+        return _fallback_title(row, table_name)
+
+    return cleaned
+
+
+def _fallback_title(row, table_name):
+    """
+    Build a display title when the real product title is missing or junk.
+    Uses brand, ASIN, or URL to create something meaningful.
+    """
+    parts = []
+
+    # Try brand
+    brand = row.get("brand")
+    if brand and brand.strip():
+        parts.append(brand.strip())
+
+    # Try ASIN from product_id (amazon_ca_deals stores ASIN here)
+    asin = row.get("product_id") or ""
+    if not asin:
+        # Try metadata dict for asin key
+        meta = row.get("metadata")
+        if isinstance(meta, dict):
+            asin = meta.get("asin", "")
+        elif isinstance(meta, str):
+            # metadata stored as string repr: "{'asin': 'B0FZHZRPMR'}"
+            m = re.search(r"'asin'\s*:\s*'([A-Z0-9]+)'", meta)
+            if m:
+                asin = m.group(1)
+
+    if asin:
+        parts.append(f"ASIN: {asin}")
+    elif row.get("clean_url") or row.get("url"):
+        # Extract something from the URL as last resort
+        url = row.get("clean_url") or row.get("url") or ""
+        try:
+            domain = urlparse(url).hostname or ""
+            domain = domain.replace("www.", "")
+            if domain:
+                parts.append(f"({domain})")
+        except Exception:
+            pass
+
+    if parts:
+        return " - ".join(parts)
+
+    # Absolute fallback: use table name + row ID
+    row_id = row.get("id", "?")
+    source_label = table_name.replace("_deals", "").replace("_", " ").title()
+    return f"{source_label} Deal #{row_id}"
+
+
 def normalize_deal(row, table_name, table_source):
     """Normalize a row from any deals table (deals, amazon_ca_deals, etc.)."""
     source = row.get("source") or table_source or table_name.replace("_deals", "")
     current_price = row.get("current_price") or row.get("price")
     original_price = row.get("original_price")
+    # Clean title — strips deal badge text like "75% offLimited-time deal"
+    raw_title = row.get("title") or row.get("name") or ""
+    title = _clean_title(raw_title, row, table_name)
     return {
         "id": f"{table_name}_{row['id']}",
-        "title": row.get("title") or row.get("name") or "",
+        "title": title,
         "brand": row.get("brand"),
         "store": row.get("store") or row.get("store_name") or table_source or "Unknown",
         "source": source,
@@ -925,10 +1025,6 @@ def _get_deal_detail(sb, table_name, actual_id):
     if not result.data:
         return jsonify({"error": "Product not found"}), 404
     data = result.data[0]
-
-    # DEBUG: include raw column names in response so we can see what the scraper writes
-    if request.args.get("debug") == "raw":
-        return jsonify({"raw_columns": sorted(data.keys()), "raw_data": {k: str(v)[:200] for k, v in data.items()}})
 
     # Get price history from deal_price_history
     history = []
