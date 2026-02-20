@@ -52,7 +52,7 @@ const FilterManager = {
             Utils.log.success('Filters loaded', `${this.options.counts.totalProducts.toLocaleString()} total products`);
         } catch (err) {
             Utils.log.error('Failed to load filter options', err.message);
-            this.options = { sources: [], sourcesByCategory: { aggregators: [], retailers: [], costcoTrackers: [] }, stores: [], regions: [], brands: [], categories: [], counts: {} };
+            this.options = { sources: [], sourcesByCategory: { dealAggregators: [], amazon: [], storeScrapers: [], costcoTrackers: [] }, stores: [], regions: [], brands: [], categories: [], counts: {} };
         }
 
         this.render();
@@ -437,14 +437,15 @@ const FilterManager = {
         return section;
     },
 
-    // ── Sources by category (aggregators, retailers, costco trackers) ──
+    // ── Sources by category — organized by scraper type ──
     _renderSourcesByCategory() {
         const section = this._section('Sources');
         const cats = this.options.sourcesByCategory;
 
         const groups = [
-            { label: 'Aggregators', items: cats.aggregators || [] },
-            { label: 'Retailers', items: cats.retailers || [] },
+            { label: 'Amazon', items: cats.amazon || [] },
+            { label: 'Deal Aggregators', items: cats.dealAggregators || [] },
+            { label: 'Store Scrapers', items: cats.storeScrapers || [] },
             { label: 'Costco Trackers', items: cats.costcoTrackers || [] },
         ];
 
