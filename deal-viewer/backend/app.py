@@ -926,6 +926,10 @@ def _get_deal_detail(sb, table_name, actual_id):
         return jsonify({"error": "Product not found"}), 404
     data = result.data[0]
 
+    # DEBUG: include raw column names in response so we can see what the scraper writes
+    if request.args.get("debug") == "raw":
+        return jsonify({"raw_columns": sorted(data.keys()), "raw_data": {k: str(v)[:200] for k, v in data.items()}})
+
     # Get price history from deal_price_history
     history = []
     try:
