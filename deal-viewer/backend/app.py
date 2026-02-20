@@ -614,8 +614,12 @@ def get_products():
     if days and not date_from:
         date_from = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
 
-    # Fetch limit per table — enough to fill pagination after filtering
-    fetch_limit = min(page * per_page + per_page, 500)
+    # Fetch limit per table — when post-filters (discount, on_sale, price_drop) are active,
+    # we need more rows because the DB can't filter these (discount is computed from prices).
+    # Without post-filters, a smaller fetch is fine for pagination.
+    has_post_filters = (min_discount is not None or max_discount is not None
+                        or on_sale_only or has_price_drop)
+    fetch_limit = 500 if has_post_filters else min(page * per_page + per_page, 500)
 
     log_debug(f"Filters: sources={sources}, search='{search}', discount={min_discount}-{max_discount}, "
               f"price={min_price}-{max_price}, dates={date_from} to {date_to}, "
