@@ -74,9 +74,25 @@ def after_request_log(response):
 # schema into a unified Product dict.
 # ══════════════════════════════════════════════
 
+def _calc_discount(current, original, stored_discount):
+    """Calculate discount percent — use stored value, or compute from prices if missing."""
+    if stored_discount is not None and stored_discount > 0:
+        return stored_discount
+    try:
+        cur = float(current) if current else 0
+        orig = float(original) if original else 0
+        if orig > 0 and cur > 0 and cur < orig:
+            return round(((orig - cur) / orig) * 100, 1)
+    except (ValueError, TypeError):
+        pass
+    return stored_discount or 0
+
+
 def normalize_deal(row, table_name, table_source):
     """Normalize a row from any deals table (deals, amazon_ca_deals, etc.)."""
     source = row.get("source") or table_source or table_name.replace("_deals", "")
+    current_price = row.get("current_price") or row.get("price")
+    original_price = row.get("original_price")
     return {
         "id": f"{table_name}_{row['id']}",
         "title": row.get("title") or row.get("name") or "",
@@ -84,9 +100,9 @@ def normalize_deal(row, table_name, table_source):
         "store": row.get("store") or row.get("store_name") or table_source or "Unknown",
         "source": source,
         "image_url": row.get("image_blob_url") or row.get("image_url") or row.get("thumbnail_url"),
-        "current_price": row.get("current_price") or row.get("price"),
-        "original_price": row.get("original_price"),
-        "discount_percent": row.get("discount_percent"),
+        "current_price": current_price,
+        "original_price": original_price,
+        "discount_percent": _calc_discount(current_price, original_price, row.get("discount_percent")),
         "category": row.get("category"),
         "region": row.get("region"),
         "affiliate_url": row.get("affiliate_url") or row.get("url") or row.get("product_url") or "#",
@@ -133,6 +149,8 @@ def normalize_retailer(row):
         except Exception:
             pass
 
+    cur = row.get("current_price")
+    orig = row.get("original_price")
     return {
         "id": f"retailer_{row['id']}",
         "title": row.get("title") or "",
@@ -140,9 +158,9 @@ def normalize_retailer(row):
         "store": store,
         "source": source,
         "image_url": image_url,
-        "current_price": row.get("current_price"),
-        "original_price": row.get("original_price"),
-        "discount_percent": row.get("sale_percentage") or row.get("discount_percent"),
+        "current_price": cur,
+        "original_price": orig,
+        "discount_percent": _calc_discount(cur, orig, row.get("sale_percentage") or row.get("discount_percent")),
         "category": row.get("retailer_category"),
         "region": row.get("region"),
         "affiliate_url": row.get("affiliate_url") or row.get("retailer_url") or "#",
@@ -190,6 +208,8 @@ def normalize_cocoprice(row, sku_image_map=None):
     sku = row.get("retailer_sku") or ""
     image_url = (sku_image_map or {}).get(sku)
 
+    cur = row.get("current_price")
+    orig = row.get("original_price")
     return {
         "id": f"cocoprice_{row['id']}",
         "title": row.get("title") or "",
@@ -197,9 +217,9 @@ def normalize_cocoprice(row, sku_image_map=None):
         "store": "Costco",
         "source": "cocopricetracker",
         "image_url": image_url,
-        "current_price": row.get("current_price"),
-        "original_price": row.get("original_price"),
-        "discount_percent": row.get("sale_percentage") or row.get("discount_percent"),
+        "current_price": cur,
+        "original_price": orig,
+        "discount_percent": _calc_discount(cur, orig, row.get("sale_percentage") or row.get("discount_percent")),
         "category": row.get("retailer_category"),
         "region": region_display,
         "affiliate_url": row.get("retailer_url") or f"https://www.costco.ca/CatalogSearch?keyword={sku or row.get('title', '')}",
@@ -624,10 +644,8 @@ def get_products():
                 query = query.ilike("title", f"%{search}%")
             if stores_filter:
                 query = query.in_(store_col, stores_filter)
-            if min_discount is not None:
-                query = query.gte("discount_percent", min_discount)
-            if max_discount is not None:
-                query = query.lte("discount_percent", max_discount)
+            # NOTE: discount filtering moved to post-processing — many tables have
+            # NULL discount_percent even when prices show a real discount.
             if max_price is not None:
                 query = query.lte("current_price", max_price)
             if min_price is not None:
@@ -636,8 +654,6 @@ def get_products():
                 query = query.gte(date_col, date_from)
             if date_to:
                 query = query.lte(date_col, date_to)
-            if on_sale_only:
-                query = query.gt("discount_percent", 0)
 
             result = query.order(date_col, desc=not ascending).limit(fetch_limit).execute()
 
@@ -662,10 +678,7 @@ def get_products():
                 query = query.in_("brand", brands_filter)
             if categories_filter:
                 query = query.in_("retailer_category", categories_filter)
-            if min_discount is not None:
-                query = query.gte("sale_percentage", min_discount)
-            if max_discount is not None:
-                query = query.lte("sale_percentage", max_discount)
+            # NOTE: discount/on_sale filtering moved to post-processing
             if max_price is not None:
                 query = query.lte("current_price", max_price)
             if min_price is not None:
@@ -674,8 +687,6 @@ def get_products():
                 query = query.gte("first_seen_at", date_from)
             if date_to:
                 query = query.lte("first_seen_at", date_to)
-            if on_sale_only:
-                query = query.gt("sale_percentage", 0)
 
             result = query.order("first_seen_at", desc=not ascending).limit(fetch_limit).execute()
 
@@ -711,10 +722,7 @@ def get_products():
                 query = query.ilike("name", f"%{search}%")
             if regions_filter:
                 query = query.ilike("region", f"%{regions_filter[0]}%")
-            if min_discount is not None:
-                query = query.gte("discount_percent", min_discount)
-            if max_discount is not None:
-                query = query.lte("discount_percent", max_discount)
+            # NOTE: discount/on_sale filtering moved to post-processing
             if max_price is not None:
                 query = query.lte("price", max_price)
             if min_price is not None:
@@ -723,8 +731,6 @@ def get_products():
                 query = query.gte("scraped_at", date_from)
             if date_to:
                 query = query.lte("scraped_at", date_to)
-            if on_sale_only:
-                query = query.gt("discount_percent", 0)
 
             result = query.order("scraped_at", desc=not ascending).limit(fetch_limit).execute()
 
@@ -742,10 +748,7 @@ def get_products():
             query = sb.table("retailer_products").select("*").contains("extra_data", {"source": "cocopricetracker.ca"})
             if search:
                 query = query.ilike("title", f"%{search}%")
-            if min_discount is not None:
-                query = query.gte("sale_percentage", min_discount)
-            if max_discount is not None:
-                query = query.lte("sale_percentage", max_discount)
+            # NOTE: discount/on_sale filtering moved to post-processing
             if max_price is not None:
                 query = query.lte("current_price", max_price)
             if min_price is not None:
@@ -754,8 +757,6 @@ def get_products():
                 query = query.gte("first_seen_at", date_from)
             if date_to:
                 query = query.lte("first_seen_at", date_to)
-            if on_sale_only:
-                query = query.gt("sale_percentage", 0)
 
             result = query.order("updated_at", desc=not ascending).limit(fetch_limit).execute()
 
@@ -780,7 +781,16 @@ def get_products():
         except Exception as e:
             log_warning(f"Query failed for cocopricetracker: {e}")
 
-    # ── Post-fetch filtering (filters that can't be pushed to Supabase) ──
+    # ── Post-fetch filtering ──
+    # Discount filtering is done HERE (not at DB level) because many tables
+    # have NULL discount_percent — we compute it from prices in normalization.
+    if min_discount is not None:
+        all_products = [p for p in all_products if (p.get("discount_percent") or 0) >= min_discount]
+    if max_discount is not None:
+        all_products = [p for p in all_products if (p.get("discount_percent") or 0) <= max_discount]
+    if on_sale_only:
+        all_products = [p for p in all_products if (p.get("discount_percent") or 0) > 0]
+
     if has_price_drop:
         all_products = [
             p for p in all_products
@@ -790,13 +800,6 @@ def get_products():
 
     if active_only:
         all_products = [p for p in all_products if p.get("is_active", True)]
-
-    if brands_filter and not include_retailer:
-        # Brand filter already applied to retailer query, but apply to deals too
-        all_products = [p for p in all_products if p.get("brand") in brands_filter or not p.get("brand")]
-
-    if categories_filter and not include_retailer:
-        all_products = [p for p in all_products if p.get("category") in categories_filter or not p.get("category")]
 
     # ── Sort combined results ──
     if sort_by == "discount_percent":

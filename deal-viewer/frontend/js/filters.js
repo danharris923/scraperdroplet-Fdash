@@ -141,10 +141,6 @@ const FilterManager = {
     activeCount() {
         let count = 0;
         if (this.state.sources.length) count++;
-        if (this.state.stores.length) count++;
-        if (this.state.regions.length) count++;
-        if (this.state.brands.length) count++;
-        if (this.state.categories.length) count++;
         if (this.state.search) count++;
         if (this.state.min_discount !== undefined) count++;
         if (this.state.max_discount !== undefined) count++;
@@ -152,6 +148,7 @@ const FilterManager = {
         if (this.state.max_price !== undefined) count++;
         if (this.state.date_from) count++;
         if (this.state.date_to) count++;
+        if (this.state.days) count++;
         if (this.state.on_sale_only) count++;
         if (this.state.has_price_drop) count++;
         if (this.state.active_only) count++;
@@ -202,25 +199,9 @@ const FilterManager = {
             container.appendChild(this._renderSourcesByCategory());
         }
 
-        // Stores
-        if (this.options && this.options.stores && this.options.stores.length > 0) {
-            container.appendChild(this._renderCheckboxList('Stores', 'stores', this.options.stores));
-        }
-
-        // Regions
-        if (this.options && this.options.regions && this.options.regions.length > 0) {
-            container.appendChild(this._renderCheckboxList('Regions', 'regions', this.options.regions));
-        }
-
-        // Brands
-        if (this.options && this.options.brands && this.options.brands.length > 0) {
-            container.appendChild(this._renderCheckboxList('Brands', 'brands', this.options.brands, 8, true));
-        }
-
-        // Categories
-        if (this.options && this.options.categories && this.options.categories.length > 0) {
-            container.appendChild(this._renderCheckboxList('Categories', 'categories', this.options.categories, 6));
-        }
+        // Stores, Regions, Brands, Categories — removed.
+        // These only apply to one table each (deals, costco, retailer_products)
+        // but appeared as global filters, causing broken/confusing results.
     },
 
     // ── Search input ──
@@ -564,10 +545,6 @@ const FilterManager = {
         // Individual filter badges
         const badges = [];
         if (this.state.sources.length) badges.push({ key: 'sources', label: `Sources: ${this.state.sources.length}` });
-        if (this.state.stores.length) badges.push({ key: 'stores', label: `Stores: ${this.state.stores.length}` });
-        if (this.state.regions.length) badges.push({ key: 'regions', label: `Regions: ${this.state.regions.length}` });
-        if (this.state.brands.length) badges.push({ key: 'brands', label: `Brands: ${this.state.brands.length}` });
-        if (this.state.categories.length) badges.push({ key: 'categories', label: `Categories: ${this.state.categories.length}` });
         if (this.state.search) badges.push({ key: 'search', label: `"${Utils.truncate(this.state.search, 20)}"` });
         if (this.state.min_discount !== undefined) badges.push({ key: 'min_discount', label: `${this.state.min_discount}%+ off` });
         if (this.state.max_discount !== undefined) badges.push({ key: 'max_discount', label: `<${this.state.max_discount}% off` });
