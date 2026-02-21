@@ -175,7 +175,7 @@ def health():
     """Health check -- verifies Supabase connection is alive."""
     try:
         sb = get_supabase()
-        result = sb.table("retailer_products").select("id", count="exact").eq("is_active", True).limit(1).execute()
+        result = sb.table("retailer_products").select("id", count="exact").eq("is_active", True).not_contains("extra_data", {"source": "cocopricetracker.ca"}).limit(1).execute()
         return jsonify({
             "status": "ok",
             "database": "connected",
@@ -217,9 +217,9 @@ def get_filters():
     total_active = 0
     recognized_total = 0
 
-    # Get total active count first
+    # Get total active count (excluding CocoPriceTracker -- no affiliate URLs, separate tracker)
     try:
-        result = sb.table("retailer_products").select("id", count="exact").eq("is_active", True).limit(0).execute()
+        result = sb.table("retailer_products").select("id", count="exact").eq("is_active", True).not_contains("extra_data", {"source": "cocopricetracker.ca"}).limit(0).execute()
         total_active = result.count or 0
     except Exception as e:
         log_warning(f"Total count failed: {e}")
@@ -227,7 +227,7 @@ def get_filters():
     # Count each store
     for source_key, (label, url_pattern) in _STORE_URL_PATTERNS.items():
         try:
-            result = sb.table("retailer_products").select("id", count="exact").eq("is_active", True).ilike("affiliate_url", url_pattern).limit(0).execute()
+            result = sb.table("retailer_products").select("id", count="exact").eq("is_active", True).not_contains("extra_data", {"source": "cocopricetracker.ca"}).ilike("affiliate_url", url_pattern).limit(0).execute()
             count = result.count or 0
             if count > 0:
                 stores.append({"value": source_key, "label": label, "count": count})
@@ -243,7 +243,7 @@ def get_filters():
     # Find most recent last_seen_at to show "scraped X ago"
     last_scraped = None
     try:
-        result = sb.table("retailer_products").select("last_seen_at").eq("is_active", True).order("last_seen_at", desc=True).limit(1).execute()
+        result = sb.table("retailer_products").select("last_seen_at").eq("is_active", True).not_contains("extra_data", {"source": "cocopricetracker.ca"}).order("last_seen_at", desc=True).limit(1).execute()
         if result.data:
             last_scraped = result.data[0].get("last_seen_at")
     except Exception:
@@ -274,13 +274,13 @@ def get_stats():
     on_sale = 0
 
     try:
-        result = sb.table("retailer_products").select("id", count="exact").eq("is_active", True).limit(0).execute()
+        result = sb.table("retailer_products").select("id", count="exact").eq("is_active", True).not_contains("extra_data", {"source": "cocopricetracker.ca"}).limit(0).execute()
         total = result.count or 0
     except Exception as e:
         log_warning(f"Stats total count failed: {e}")
 
     try:
-        result = sb.table("retailer_products").select("id", count="exact").eq("is_active", True).gt("sale_percentage", 0).limit(0).execute()
+        result = sb.table("retailer_products").select("id", count="exact").eq("is_active", True).not_contains("extra_data", {"source": "cocopricetracker.ca"}).gt("sale_percentage", 0).limit(0).execute()
         on_sale = result.count or 0
     except Exception as e:
         log_warning(f"Stats on_sale count failed: {e}")
@@ -327,17 +327,16 @@ def get_products():
     if days and not date_from:
         date_from = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
 
-    # Discount filtering is done post-fetch because discount_percent is computed
-    # from prices during normalization (many rows have NULL sale_percentage).
-    has_post_filters = min_discount is not None
-    fetch_limit = 500 if has_post_filters else min(page * per_page + per_page, 500)
+    # We always fetch 500 rows because source filtering is done post-fetch
+    # (source is derived from affiliate_url hostname during normalization).
+    fetch_limit = 500
 
     log_debug(f"Filters: sources={sources}, search='{search}', min_discount={min_discount}, "
               f"price={min_price}-{max_price}, days={days}, sort={sort_by}/{sort_order}, page={page}")
 
-    # ── Build query ──
+    # ── Build query (exclude CocoPriceTracker -- no affiliate URLs) ──
     try:
-        query = sb.table("retailer_products").select("*").eq("is_active", True)
+        query = sb.table("retailer_products").select("*").eq("is_active", True).not_contains("extra_data", {"source": "cocopricetracker.ca"})
 
         if search:
             query = query.ilike("title", f"%{search}%")
