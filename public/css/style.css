@@ -708,7 +708,7 @@ input[type="date"] {
     word-break: break-word;
 }
 
-/* ── Welcome state — aggressive wireframe spider crawler ── */
+/* ── Welcome state — vector spider crawler image ── */
 .welcome-state {
     padding: 20px 20px 40px;
     background: radial-gradient(ellipse at 50% 60%, rgba(34, 197, 94, 0.04) 0%, transparent 60%);
@@ -719,110 +719,19 @@ input[type="date"] {
     margin: 0 auto 12px;
 }
 
-.spider-svg {
+/* Spider image — slow breathe pulse + neon glow */
+.spider-img {
     width: 100%;
     height: auto;
     display: block;
+    border-radius: 8px;
+    filter: drop-shadow(0 0 20px rgba(34, 197, 94, 0.35)) drop-shadow(0 0 60px rgba(34, 197, 94, 0.15));
+    animation: spiderBreathe 4s ease-in-out infinite;
 }
 
-/* Scan line sweeps down — slow, ominous */
-.scan-line {
-    animation: scanSweep 5s ease-in-out infinite;
-}
-
-@keyframes scanSweep {
-    0%   { transform: translateY(-100%); }
-    100% { transform: translateY(100%); }
-}
-
-/* Main eyes — aggressive pulse */
-.eye-pulse {
-    animation: eyePulse 2s ease-in-out infinite;
-}
-
-@keyframes eyePulse {
-    0%, 100% { opacity: 0.95; r: 5; }
-    40%      { opacity: 1; r: 6; }
-    60%      { opacity: 0.5; r: 4; }
-}
-
-/* Secondary eyes — offset pulse */
-.eye-pulse-alt {
-    animation: eyePulseAlt 2s ease-in-out infinite;
-}
-
-@keyframes eyePulseAlt {
-    0%, 100% { opacity: 0.7; }
-    30%      { opacity: 0.4; }
-    70%      { opacity: 0.9; }
-}
-
-/* Leg sway — staggered, twitchy */
-.leg-r1, .leg-l1 { animation: legTwitch1 2.8s ease-in-out infinite; }
-.leg-r2, .leg-l2 { animation: legTwitch2 3.1s ease-in-out infinite; }
-.leg-r3, .leg-l3 { animation: legTwitch1 3.4s ease-in-out infinite; }
-.leg-r4, .leg-l4 { animation: legTwitch2 3.7s ease-in-out infinite; }
-
-@keyframes legTwitch1 {
-    0%, 100% { transform: translate(0, 0); }
-    25%      { transform: translate(-1px, -2px); }
-    75%      { transform: translate(1px, 1px); }
-}
-
-@keyframes legTwitch2 {
-    0%, 100% { transform: translate(0, 0); }
-    30%      { transform: translate(1px, -1px); }
-    60%      { transform: translate(-1px, 2px); }
-}
-
-/* Grid intersection sparks — flicker */
-.grid-sparks circle {
-    animation: sparkFlicker 1.5s ease-in-out infinite alternate;
-}
-
-.grid-sparks circle:nth-child(2) { animation-delay: 0.3s; }
-.grid-sparks circle:nth-child(3) { animation-delay: 0.6s; }
-.grid-sparks circle:nth-child(4) { animation-delay: 0.9s; }
-.grid-sparks circle:nth-child(5) { animation-delay: 1.2s; }
-
-@keyframes sparkFlicker {
-    0%   { opacity: 0.2; }
-    50%  { opacity: 0.8; }
-    100% { opacity: 0.3; }
-}
-
-/* Claw sparks — where legs hit the ground */
-.claw-sparks circle {
-    animation: clawSpark 2s ease-in-out infinite;
-}
-
-.claw-sparks circle:nth-child(odd) { animation-delay: 0.5s; }
-
-@keyframes clawSpark {
-    0%, 100% { opacity: 0.4; }
-    50%      { opacity: 1; }
-}
-
-/* HUD text blink */
-.hud-blink {
-    animation: hudBlink 1.2s steps(1) infinite;
-}
-
-@keyframes hudBlink {
-    0%, 55% { opacity: 0.35; }
-    56%, 85% { opacity: 0; }
-    86%      { opacity: 0.35; }
-}
-
-/* Spider body — slow menacing breathe */
-.spider-body {
-    transform-origin: 300px 150px;
-    animation: bodyBreathe 4s ease-in-out infinite;
-}
-
-@keyframes bodyBreathe {
-    0%, 100% { transform: scale(1); }
-    50%      { transform: scale(1.02); }
+@keyframes spiderBreathe {
+    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 20px rgba(34, 197, 94, 0.35)) drop-shadow(0 0 60px rgba(34, 197, 94, 0.15)); }
+    50%      { transform: scale(1.015); filter: drop-shadow(0 0 30px rgba(34, 197, 94, 0.5)) drop-shadow(0 0 80px rgba(34, 197, 94, 0.25)); }
 }
 
 .welcome-title {
