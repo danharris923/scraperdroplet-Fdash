@@ -13,62 +13,160 @@
   --accent: #22d3ee; --green: #22c55e; --yellow: #eab308; --red: #ef4444;
   --blue: #3b82f6; --purple: #a855f7;
   --radius: 8px;
+  --sidebar-w: 260px;
 }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 a { color: var(--accent); text-decoration: none; }
 
-/* ── Top Bar ── */
+/* ── Layout: sidebar + main ── */
+.layout { display: flex; min-height: 100vh; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: var(--sidebar-w); min-width: var(--sidebar-w);
+  background: var(--bg2); border-right: 1px solid var(--bg3);
+  height: 100vh; position: sticky; top: 0;
+  display: flex; flex-direction: column;
+  transition: margin-left 0.25s ease, opacity 0.25s ease;
+  overflow: hidden; z-index: 150;
+}
+.sidebar.collapsed { margin-left: calc(var(--sidebar-w) * -1); opacity: 0; pointer-events: none; }
+
+/* Sidebar header */
+.sidebar-header {
+  padding: 16px; display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--bg3); flex-shrink: 0;
+}
+.sidebar-header h1 { font-size: 18px; font-weight: 700; color: var(--accent); }
+.sidebar-toggle {
+  width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--bg4);
+  background: var(--bg3); color: var(--text2); font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+}
+.sidebar-toggle:hover { border-color: var(--accent); color: var(--text); }
+
+/* Sidebar scroll area for filters */
+.sidebar-filters {
+  flex: 1; overflow-y: auto; padding: 12px 16px;
+  scrollbar-width: thin; scrollbar-color: var(--bg4) transparent;
+}
+.sidebar-filters::-webkit-scrollbar { width: 5px; }
+.sidebar-filters::-webkit-scrollbar-track { background: transparent; }
+.sidebar-filters::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
+
+/* Filter sections */
+.filter-group { margin-bottom: 20px; }
+.filter-group-title {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text3); margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--bg3);
+}
+
+/* Search inside sidebar */
+.sidebar-search {
+  width: 100%; background: var(--bg3); border: 1px solid var(--bg4); border-radius: var(--radius);
+  padding: 8px 10px; color: var(--text); font-size: 13px; outline: none; transition: border-color 0.15s;
+}
+.sidebar-search:focus { border-color: var(--accent); }
+
+/* Store list (checkboxes) */
+.store-list { display: flex; flex-direction: column; gap: 2px; }
+.store-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer; transition: background 0.12s;
+  font-size: 13px; color: var(--text2); user-select: none;
+}
+.store-item:hover { background: var(--bg3); }
+.store-item.active { background: var(--bg3); color: var(--text); }
+.store-item input[type="checkbox"] { display: none; }
+/* Custom checkbox */
+.store-check {
+  width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--bg4);
+  background: var(--bg); flex-shrink: 0; position: relative; transition: all 0.15s;
+}
+.store-item.active .store-check {
+  background: var(--accent); border-color: var(--accent);
+}
+.store-item.active .store-check::after {
+  content: ''; position: absolute; top: 2px; left: 5px;
+  width: 4px; height: 8px; border: solid var(--bg); border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.store-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.store-count {
+  font-size: 11px; color: var(--text3); background: var(--bg4); padding: 1px 6px;
+  border-radius: 8px; flex-shrink: 0;
+}
+
+/* Dropdown selects in sidebar */
+.sidebar-select {
+  width: 100%; background: var(--bg3); border: 1px solid var(--bg4); border-radius: var(--radius);
+  padding: 8px 10px; color: var(--text); font-size: 13px; cursor: pointer; outline: none;
+  transition: border-color 0.15s; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2371717a' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center;
+}
+.sidebar-select:focus { border-color: var(--accent); }
+
+/* Price range inputs */
+.price-range-row { display: flex; gap: 8px; align-items: center; }
+.price-input {
+  flex: 1; background: var(--bg3); border: 1px solid var(--bg4); border-radius: var(--radius);
+  padding: 8px 10px; color: var(--text); font-size: 13px; outline: none; width: 0;
+  transition: border-color 0.15s;
+}
+.price-input:focus { border-color: var(--accent); }
+.price-range-row .sep { color: var(--text3); font-size: 12px; }
+
+/* Sort option in sidebar */
+.sidebar-sort { margin-bottom: 20px; }
+
+/* Clear all button */
+.clear-filters {
+  width: 100%; padding: 8px; background: transparent; border: 1px solid var(--bg4);
+  border-radius: var(--radius); color: var(--text3); font-size: 12px; cursor: pointer;
+  transition: all 0.15s; margin-top: 4px;
+}
+.clear-filters:hover { border-color: var(--red); color: var(--red); }
+.clear-filters.has-filters { border-color: var(--accent); color: var(--accent); }
+
+/* Active filter count badge on sidebar header */
+.filter-count-badge {
+  font-size: 11px; background: var(--accent); color: var(--bg); padding: 1px 7px;
+  border-radius: 10px; font-weight: 700; display: none;
+}
+.filter-count-badge.visible { display: inline-block; }
+
+/* ── Main Content ── */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* Top bar (minimal: just toggle + status) */
 .topbar {
   position: sticky; top: 0; z-index: 100;
   background: var(--bg2); border-bottom: 1px solid var(--bg3);
-  padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 20px; display: flex; align-items: center; gap: 12px;
 }
-.topbar h1 { font-size: 18px; font-weight: 700; color: var(--accent); margin-right: 8px; white-space: nowrap; }
+.topbar-toggle {
+  width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--bg4);
+  background: var(--bg3); color: var(--text2); font-size: 18px; cursor: pointer;
+  display: none; align-items: center; justify-content: center; transition: all 0.15s;
+}
+.topbar-toggle:hover { border-color: var(--accent); color: var(--text); }
+/* Show topbar toggle only when sidebar is collapsed */
+.sidebar.collapsed ~ .main .topbar-toggle { display: flex; }
+.topbar-title {
+  font-size: 16px; font-weight: 700; color: var(--accent); display: none;
+}
+.sidebar.collapsed ~ .main .topbar-title { display: block; }
 
-/* Store toggle buttons */
-.store-btn {
-  padding: 5px 12px; border-radius: 20px; border: 1px solid var(--bg4);
-  background: var(--bg3); color: var(--text2); font-size: 13px; cursor: pointer;
-  transition: all 0.15s; white-space: nowrap;
-}
-.store-btn:hover { border-color: var(--accent); color: var(--text); }
-.store-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
-.store-btn .count { font-size: 11px; opacity: 0.7; margin-left: 4px; }
-
-/* Search */
-.search-box {
-  margin-left: auto; position: relative;
-}
-.search-box input {
-  background: var(--bg3); border: 1px solid var(--bg4); border-radius: var(--radius);
-  padding: 6px 12px 6px 32px; color: var(--text); font-size: 13px; width: 200px;
-  outline: none; transition: border-color 0.15s;
-}
-.search-box input:focus { border-color: var(--accent); }
-.search-box::before {
-  content: '\1F50D'; position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
-  font-size: 13px; opacity: 0.5;
-}
-
-/* Dropdowns */
-.filter-select {
-  background: var(--bg3); border: 1px solid var(--bg4); border-radius: var(--radius);
-  padding: 6px 10px; color: var(--text); font-size: 13px; cursor: pointer; outline: none;
-}
-.filter-select:focus { border-color: var(--accent); }
-
-/* ── Status Bar ── */
-.status-bar {
-  padding: 8px 20px; background: var(--bg); border-bottom: 1px solid var(--bg3);
-  font-size: 13px; color: var(--text2); display: flex; align-items: center; gap: 8px;
-}
-.status-bar .count { color: var(--text); font-weight: 600; }
-.status-bar .time { color: var(--text3); }
+/* Status info in topbar */
+.status-info { font-size: 13px; color: var(--text2); flex: 1; }
+.status-info .count { color: var(--text); font-weight: 600; }
+.status-info .time { color: var(--text3); }
 
 /* ── Product Grid ── */
 .grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px; padding: 20px; max-width: 1400px; margin: 0 auto;
+  gap: 16px; padding: 20px; flex: 1;
 }
 
 /* ── Product Card ── */
@@ -189,47 +287,123 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 /* ── Responsive ── */
-@media (max-width: 768px) {
-  .topbar { padding: 10px 12px; gap: 8px; }
-  .search-box input { width: 140px; }
+@media (max-width: 900px) {
+  /* Sidebar becomes overlay on mobile */
+  .sidebar {
+    position: fixed; left: 0; top: 0; z-index: 200;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+  }
+  .sidebar.collapsed { margin-left: calc(var(--sidebar-w) * -1); }
+  /* Always show topbar toggle on mobile */
+  .topbar-toggle { display: flex !important; }
+  .topbar-title { display: block !important; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; padding: 12px; }
   .card-img, .card-img-placeholder { height: 140px; }
   .modal { margin: 0 8px; }
 }
+/* Mobile overlay backdrop */
+.sidebar-backdrop {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  z-index: 199;
+}
+.sidebar-backdrop.visible { display: block; }
 </style>
 </head>
 <body>
 
-<!-- Top Bar: title + store buttons + search + filters -->
-<div class="topbar" id="topbar">
-  <h1>Deals</h1>
-  <div id="store-buttons"></div>
-  <div class="search-box">
-    <input type="text" id="search-input" placeholder="Search deals...">
+<!-- Sidebar backdrop (mobile overlay) -->
+<div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+<div class="layout">
+
+  <!-- ── Left Sidebar: filters ── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h1>Deals</h1>
+      <span class="filter-count-badge" id="filter-badge">0</span>
+      <button class="sidebar-toggle" id="sidebar-close" title="Collapse sidebar">&lsaquo;</button>
+    </div>
+
+    <div class="sidebar-filters">
+      <!-- Search -->
+      <div class="filter-group">
+        <div class="filter-group-title">Search</div>
+        <input type="text" class="sidebar-search" id="search-input" placeholder="Search deals...">
+      </div>
+
+      <!-- Stores (checkboxes) -->
+      <div class="filter-group">
+        <div class="filter-group-title">Stores</div>
+        <div class="store-list" id="store-list"></div>
+      </div>
+
+      <!-- Discount -->
+      <div class="filter-group">
+        <div class="filter-group-title">Minimum Discount</div>
+        <select class="sidebar-select" id="discount-filter">
+          <option value="0">Any discount</option>
+          <option value="10">10%+ off</option>
+          <option value="25">25%+ off</option>
+          <option value="50">50%+ off</option>
+          <option value="75">75%+ off</option>
+        </select>
+      </div>
+
+      <!-- Date range -->
+      <div class="filter-group">
+        <div class="filter-group-title">Date Range</div>
+        <select class="sidebar-select" id="date-filter">
+          <option value="">All time</option>
+          <option value="1">Today</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+        </select>
+      </div>
+
+      <!-- Price range -->
+      <div class="filter-group">
+        <div class="filter-group-title">Price Range</div>
+        <div class="price-range-row">
+          <input type="number" class="price-input" id="price-min" placeholder="Min $" min="0" step="1">
+          <span class="sep">to</span>
+          <input type="number" class="price-input" id="price-max" placeholder="Max $" min="0" step="1">
+        </div>
+      </div>
+
+      <!-- Sort -->
+      <div class="filter-group">
+        <div class="filter-group-title">Sort By</div>
+        <select class="sidebar-select" id="sort-filter">
+          <option value="last_seen_at:desc">Recently seen</option>
+          <option value="first_seen_at:desc">Newest first</option>
+          <option value="discount_percent:desc">Biggest discount</option>
+          <option value="current_price:asc">Price: low to high</option>
+          <option value="current_price:desc">Price: high to low</option>
+        </select>
+      </div>
+
+      <!-- Clear all -->
+      <button class="clear-filters" id="clear-filters">Clear all filters</button>
+    </div>
+  </aside>
+
+  <!-- ── Main content ── -->
+  <div class="main">
+    <!-- Top bar: sidebar toggle + status -->
+    <div class="topbar" id="topbar">
+      <button class="topbar-toggle" id="sidebar-open" title="Open filters">&rsaquo;</button>
+      <span class="topbar-title">Deals</span>
+      <div class="status-info" id="status-bar">Loading...</div>
+    </div>
+
+    <!-- Product grid -->
+    <div class="grid" id="product-grid"></div>
+
+    <!-- Lazy load sentinel -->
+    <div id="load-more" class="loading" style="display:none">Loading more...</div>
   </div>
-  <select class="filter-select" id="discount-filter">
-    <option value="0">Any discount</option>
-    <option value="10">10%+ off</option>
-    <option value="25">25%+ off</option>
-    <option value="50">50%+ off</option>
-    <option value="75">75%+ off</option>
-  </select>
-  <select class="filter-select" id="date-filter">
-    <option value="">All time</option>
-    <option value="1">Today</option>
-    <option value="7">7 days</option>
-    <option value="30">30 days</option>
-  </select>
+
 </div>
-
-<!-- Status bar -->
-<div class="status-bar" id="status-bar">Loading...</div>
-
-<!-- Product grid -->
-<div class="grid" id="product-grid"></div>
-
-<!-- Lazy load sentinel -->
-<div id="load-more" class="loading" style="display:none">Loading more...</div>
 
 <!-- Detail modal -->
 <div class="modal-overlay" id="modal-overlay">
@@ -246,6 +420,10 @@ const state = {
   search: '',
   minDiscount: 0,
   days: null,           // null = all time
+  priceMin: null,
+  priceMax: null,
+  sortBy: 'last_seen_at',
+  sortOrder: 'desc',
   page: 1,
   perPage: 99,
   totalProducts: 0,
@@ -260,12 +438,26 @@ function debounce(fn, ms) {
 }
 
 // ══════════════════════════════════════════════
+// SIDEBAR TOGGLE
+// ══════════════════════════════════════════════
+const sidebar = document.getElementById('sidebar');
+const backdrop = document.getElementById('sidebar-backdrop');
+
+document.getElementById('sidebar-close').addEventListener('click', () => toggleSidebar(false));
+document.getElementById('sidebar-open').addEventListener('click', () => toggleSidebar(true));
+backdrop.addEventListener('click', () => toggleSidebar(false));
+
+function toggleSidebar(show) {
+  sidebar.classList.toggle('collapsed', !show);
+  backdrop.classList.toggle('visible', show && window.innerWidth <= 900);
+}
+
+// ══════════════════════════════════════════════
 // API
 // ══════════════════════════════════════════════
 const API_BASE = '/api';
 
 async function apiFetch(path, params = {}) {
-  // Strip empty/null params
   const clean = {};
   for (const [k, v] of Object.entries(params)) {
     if (v !== null && v !== undefined && v !== '' && v !== 0) clean[k] = v;
@@ -323,7 +515,7 @@ async function init() {
   try {
     const data = await apiFetch('/filters');
     state.stores = data.stores || [];
-    renderStoreButtons();
+    renderStoreList();
     await loadProducts();
   } catch (e) {
     document.getElementById('status-bar').textContent = 'Failed to connect to API: ' + e.message;
@@ -332,23 +524,29 @@ async function init() {
 }
 
 // ══════════════════════════════════════════════
-// STORE BUTTONS
+// STORE LIST (checkbox style)
 // ══════════════════════════════════════════════
-function renderStoreButtons() {
-  const container = document.getElementById('store-buttons');
+function renderStoreList() {
+  const container = document.getElementById('store-list');
   container.innerHTML = '';
-  // Fragment for performance
   const frag = document.createDocumentFragment();
   for (const s of state.stores) {
-    const btn = document.createElement('button');
-    btn.className = 'store-btn';
-    btn.dataset.source = s.value;
-    btn.innerHTML = escapeHtml(s.label) + '<span class="count">' + s.count.toLocaleString() + '</span>';
-    btn.addEventListener('click', () => toggleSource(s.value));
-    frag.appendChild(btn);
+    const item = document.createElement('label');
+    item.className = 'store-item';
+    item.dataset.source = s.value;
+    item.innerHTML = `
+      <input type="checkbox" value="${escapeHtml(s.value)}">
+      <span class="store-check"></span>
+      <span class="store-name">${escapeHtml(s.label)}</span>
+      <span class="store-count">${s.count.toLocaleString()}</span>`;
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggleSource(s.value);
+    });
+    frag.appendChild(item);
   }
   container.appendChild(frag);
-  updateStoreButtonStates();
+  updateStoreListStates();
 }
 
 function toggleSource(value) {
@@ -358,13 +556,16 @@ function toggleSource(value) {
   } else {
     state.selectedSources.push(value);
   }
-  updateStoreButtonStates();
+  updateStoreListStates();
+  updateFilterBadge();
   resetAndLoad();
 }
 
-function updateStoreButtonStates() {
-  document.querySelectorAll('.store-btn').forEach(btn => {
-    btn.classList.toggle('active', state.selectedSources.includes(btn.dataset.source));
+function updateStoreListStates() {
+  document.querySelectorAll('.store-item').forEach(item => {
+    const isActive = state.selectedSources.includes(item.dataset.source);
+    item.classList.toggle('active', isActive);
+    item.querySelector('input').checked = isActive;
   });
 }
 
@@ -373,18 +574,88 @@ function updateStoreButtonStates() {
 // ══════════════════════════════════════════════
 document.getElementById('search-input').addEventListener('input', debounce(e => {
   state.search = e.target.value.trim();
+  updateFilterBadge();
   resetAndLoad();
 }, 350));
 
 document.getElementById('discount-filter').addEventListener('change', e => {
   state.minDiscount = parseInt(e.target.value) || 0;
+  updateFilterBadge();
   resetAndLoad();
 });
 
 document.getElementById('date-filter').addEventListener('change', e => {
   state.days = e.target.value ? parseInt(e.target.value) : null;
+  updateFilterBadge();
   resetAndLoad();
 });
+
+// Price range inputs (debounced)
+const priceMinInput = document.getElementById('price-min');
+const priceMaxInput = document.getElementById('price-max');
+priceMinInput.addEventListener('input', debounce(() => {
+  state.priceMin = priceMinInput.value ? parseFloat(priceMinInput.value) : null;
+  updateFilterBadge();
+  resetAndLoad();
+}, 500));
+priceMaxInput.addEventListener('input', debounce(() => {
+  state.priceMax = priceMaxInput.value ? parseFloat(priceMaxInput.value) : null;
+  updateFilterBadge();
+  resetAndLoad();
+}, 500));
+
+// Sort
+document.getElementById('sort-filter').addEventListener('change', e => {
+  const [col, order] = e.target.value.split(':');
+  state.sortBy = col;
+  state.sortOrder = order;
+  resetAndLoad();
+});
+
+// Clear all filters
+document.getElementById('clear-filters').addEventListener('click', () => {
+  state.selectedSources = [];
+  state.search = '';
+  state.minDiscount = 0;
+  state.days = null;
+  state.priceMin = null;
+  state.priceMax = null;
+  state.sortBy = 'last_seen_at';
+  state.sortOrder = 'desc';
+
+  // Reset inputs
+  document.getElementById('search-input').value = '';
+  document.getElementById('discount-filter').value = '0';
+  document.getElementById('date-filter').value = '';
+  document.getElementById('price-min').value = '';
+  document.getElementById('price-max').value = '';
+  document.getElementById('sort-filter').value = 'last_seen_at:desc';
+
+  updateStoreListStates();
+  updateFilterBadge();
+  resetAndLoad();
+});
+
+// ══════════════════════════════════════════════
+// FILTER BADGE (shows count of active filters)
+// ══════════════════════════════════════════════
+function updateFilterBadge() {
+  let count = 0;
+  if (state.selectedSources.length > 0) count++;
+  if (state.search) count++;
+  if (state.minDiscount > 0) count++;
+  if (state.days) count++;
+  if (state.priceMin != null) count++;
+  if (state.priceMax != null) count++;
+
+  const badge = document.getElementById('filter-badge');
+  badge.textContent = count;
+  badge.classList.toggle('visible', count > 0);
+
+  const clearBtn = document.getElementById('clear-filters');
+  clearBtn.classList.toggle('has-filters', count > 0);
+  clearBtn.textContent = count > 0 ? `Clear all filters (${count})` : 'Clear all filters';
+}
 
 // Reset state and reload from page 1
 function resetAndLoad() {
@@ -413,13 +684,15 @@ async function loadProducts(reset = false) {
     const params = {
       page: state.page,
       per_page: state.perPage,
-      sort_by: 'last_seen_at',
-      sort_order: 'desc',
+      sort_by: state.sortBy,
+      sort_order: state.sortOrder,
     };
     if (state.selectedSources.length > 0) params.sources = state.selectedSources.join(',');
     if (state.search) params.search = state.search;
     if (state.minDiscount > 0) params.min_discount = state.minDiscount;
     if (state.days) params.days = state.days;
+    if (state.priceMin != null) params.min_price = state.priceMin;
+    if (state.priceMax != null) params.max_price = state.priceMax;
 
     const data = await apiFetch('/products', params);
 
@@ -427,7 +700,6 @@ async function loadProducts(reset = false) {
     state.totalPages = data.total_pages;
     state.page = data.page;
 
-    // Check if we've loaded everything
     if (data.page >= data.total_pages || data.products.length === 0) {
       state.allLoaded = true;
     }
@@ -524,7 +796,7 @@ function appendCards(products) {
 // ══════════════════════════════════════════════
 const scrollObserver = new IntersectionObserver(entries => {
   if (entries[0].isIntersecting) loadMore();
-}, { rootMargin: '400px' });  // trigger 400px before reaching bottom
+}, { rootMargin: '400px' });
 scrollObserver.observe(document.getElementById('load-more'));
 
 // ══════════════════════════════════════════════
@@ -533,7 +805,6 @@ scrollObserver.observe(document.getElementById('load-more'));
 const overlay = document.getElementById('modal-overlay');
 const modalEl = document.getElementById('modal');
 
-// Close modal on overlay click or Escape
 overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
@@ -570,7 +841,6 @@ function renderModal(p) {
     ? `<span class="current">${formatPrice(p.current_price)}</span>${p.original_price && p.original_price > p.current_price ? `<span class="original">${formatPrice(p.original_price)}</span>` : ''}`
     : '';
 
-  // Savings in dollars
   let savingsHtml = '';
   if (p.current_price && p.original_price && p.original_price > p.current_price) {
     const saved = (p.original_price - p.current_price).toFixed(2);
@@ -580,10 +850,8 @@ function renderModal(p) {
   const history = p.price_history || [];
   const chartHtml = history.length > 0 ? renderPriceChart(history) : '';
 
-  // Description if available
   const descHtml = p.description ? `<div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5;">${escapeHtml(p.description)}</div>` : '';
 
-  // Affiliate URL with copy button
   const urlStr = p.affiliate_url || '#';
   const urlDisplay = urlStr.length > 70 ? urlStr.substring(0, 70) + '...' : urlStr;
 
@@ -621,7 +889,6 @@ function copyUrl(btn, url) {
     btn.style.background = 'var(--green)';
     setTimeout(() => { btn.textContent = 'Copy Link'; btn.style.background = ''; }, 1500);
   }).catch(() => {
-    // Fallback for non-HTTPS
     const ta = document.createElement('textarea');
     ta.value = url; document.body.appendChild(ta); ta.select();
     document.execCommand('copy'); document.body.removeChild(ta);
@@ -636,7 +903,6 @@ function copyUrl(btn, url) {
 function renderPriceChart(history) {
   if (!history.length) return '';
 
-  // Filter to entries with valid price
   const points = history.filter(h => h.price != null).map(h => ({
     price: Number(h.price),
     date: new Date(h.scraped_at),
@@ -646,7 +912,6 @@ function renderPriceChart(history) {
 
   if (points.length === 0) return '';
 
-  // Single data point -- just show the price
   if (points.length === 1) {
     const pt = points[0];
     return `
@@ -659,17 +924,14 @@ function renderPriceChart(history) {
       </div>`;
   }
 
-  // Chart dimensions
   const W = 640, H = 220;
   const pad = { top: 20, right: 20, bottom: 40, left: 60 };
   const cw = W - pad.left - pad.right;
   const ch = H - pad.top - pad.bottom;
 
-  // Scales
   const prices = points.map(p => p.price);
   let minP = Math.min(...prices);
   let maxP = Math.max(...prices);
-  // Add 10% padding to price range
   const pRange = maxP - minP || 1;
   minP = Math.max(0, minP - pRange * 0.1);
   maxP = maxP + pRange * 0.1;
@@ -681,12 +943,9 @@ function renderPriceChart(history) {
   function x(date) { return pad.left + ((date.getTime() - minT) / tRange) * cw; }
   function y(price) { return pad.top + ch - ((price - minP) / (maxP - minP)) * ch; }
 
-  // Build polyline
   const linePoints = points.map(p => `${x(p.date).toFixed(1)},${y(p.price).toFixed(1)}`).join(' ');
-  // Area fill (closed polygon down to bottom)
   const areaPoints = linePoints + ` ${x(points[points.length-1].date).toFixed(1)},${(pad.top + ch).toFixed(1)} ${x(points[0].date).toFixed(1)},${(pad.top + ch).toFixed(1)}`;
 
-  // Grid lines (5 horizontal)
   let gridLines = '';
   const steps = 4;
   for (let i = 0; i <= steps; i++) {
@@ -696,7 +955,6 @@ function renderPriceChart(history) {
     gridLines += `<text x="${pad.left - 8}" y="${(yPos + 4).toFixed(1)}" text-anchor="end" fill="var(--text3)" font-size="11">$${pVal.toFixed(0)}</text>`;
   }
 
-  // Date labels on X axis (show ~4 dates)
   let dateLabels = '';
   const dateCount = Math.min(points.length, 5);
   const dateStep = Math.max(1, Math.floor(points.length / (dateCount - 1)));
@@ -709,24 +967,19 @@ function renderPriceChart(history) {
       dateLabels += `<text x="${x(p.date).toFixed(1)}" y="${H - 5}" text-anchor="middle" fill="var(--text3)" font-size="11">${label}</text>`;
     }
   }
-  // Always show last date
   const lastP = points[points.length - 1];
   const lastLabel = lastP.date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
   if (!shownDates.has(lastLabel)) {
     dateLabels += `<text x="${x(lastP.date).toFixed(1)}" y="${H - 5}" text-anchor="middle" fill="var(--text3)" font-size="11">${lastLabel}</text>`;
   }
 
-  // Data point dots -- green for on-sale, accent for regular
   let dots = '';
-  // Tooltip areas (invisible rects for hover)
-  let tooltipAreas = '';
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
     const cx = x(p.date).toFixed(1);
     const cy = y(p.price).toFixed(1);
     const color = p.onSale ? 'var(--green)' : 'var(--accent)';
     dots += `<circle cx="${cx}" cy="${cy}" r="4" fill="${color}" stroke="var(--bg2)" stroke-width="2"/>`;
-    // Tooltip: show on hover via title element
     const tipDate = p.date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
     dots += `<circle cx="${cx}" cy="${cy}" r="12" fill="transparent" style="cursor:pointer"><title>${formatPrice(p.price)} - ${tipDate}${p.onSale ? ' (On Sale)' : ''}</title></circle>`;
   }
