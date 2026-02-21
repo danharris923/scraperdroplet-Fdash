@@ -230,7 +230,7 @@ def normalize_retailer(row):
         # Also set source based on store name from the sku
         store_lower = store.lower()
         if "amazon" in store_lower:
-            source = "amazon"
+            source = "amazon_ca"
         elif "leons" in store_lower:
             source = "leons"
         # else stays "flipp" (default)
@@ -238,14 +238,25 @@ def normalize_retailer(row):
         try:
             parsed = urlparse(row["affiliate_url"])
             hostname = parsed.hostname.replace("www.", "") if parsed.hostname else ""
-            if "amazon" in hostname:
-                store, source = "Amazon", "amazon"  # matches "amazon" filter value
-            elif "leons" in hostname:
-                store, source = "Leon's", "leons"  # matches "leons" filter value
-            else:
+            # Map hostname to source/store — these match the filter source values
+            _HOST_SOURCE_MAP = {
+                "amazon":       ("Amazon",          "amazon_ca"),
+                "leons":        ("Leon's",          "leons"),
+                "thebrick":     ("The Brick",       "the_brick"),
+                "frankandoak":  ("Frank & Oak",     "frank_and_oak"),
+                "reebok":       ("Reebok",          "reebok_ca"),
+                "mastermindtoys": ("Mastermind Toys", "mastermind_toys"),
+            }
+            matched = False
+            for key, (s_name, s_source) in _HOST_SOURCE_MAP.items():
+                if key in hostname:
+                    store, source = s_name, s_source
+                    matched = True
+                    break
+            if not matched:
                 domain = hostname.split(".")[0]
                 store = domain.capitalize()
-                source = "flipp"  # non-amazon/leons retailer products are Flipp flyer deals
+                source = "flipp"  # unrecognized retailer products default to Flipp
         except Exception:
             pass
 
@@ -407,22 +418,38 @@ def get_filters():
             log_warning(f"Count failed for {table['name']}: {e}")
             counts[table["name"]] = 0
 
-    # Retailer products (excluding CocoPriceTracker) — split into Amazon vs Flipp
+    # Retailer products (excluding CocoPriceTracker) — count per store by affiliate_url hostname
+    # All unified scrapers now write to retailer_products instead of per-store deal tables.
+    _RETAILER_URL_PATTERNS = {
+        "retailer_amazon":          "%amazon%",
+        "retailer_leons":           "%leons.ca%",
+        "retailer_the_brick":       "%thebrick.com%",
+        "retailer_frank_and_oak":   "%frankandoak.com%",
+        "retailer_reebok_ca":       "%reebok.ca%",
+        "retailer_mastermind_toys": "%mastermindtoys.com%",
+    }
     try:
         # Total retailer (non-cocoprice)
         result = sb.table("retailer_products").select("id", count="exact").not_contains("extra_data", {"source": "cocopricetracker.ca"}).limit(0).execute()
         counts["retailer_products"] = result.count or 0
 
-        # Amazon subset — products with amazon in the affiliate_url
-        result = sb.table("retailer_products").select("id", count="exact").not_contains("extra_data", {"source": "cocopricetracker.ca"}).ilike("affiliate_url", "%amazon%").limit(0).execute()
-        counts["retailer_amazon"] = result.count or 0
+        # Count each store by affiliate_url
+        recognized_total = 0
+        for count_key, url_pattern in _RETAILER_URL_PATTERNS.items():
+            try:
+                result = sb.table("retailer_products").select("id", count="exact").not_contains("extra_data", {"source": "cocopricetracker.ca"}).ilike("affiliate_url", url_pattern).limit(0).execute()
+                counts[count_key] = result.count or 0
+                recognized_total += counts[count_key]
+            except Exception:
+                counts[count_key] = 0
 
-        # Flipp = everything else in retailer_products (non-Amazon, non-CocoPriceTracker)
-        counts["retailer_flipp"] = max(0, counts["retailer_products"] - counts["retailer_amazon"])
+        # Flipp = everything else in retailer_products (unrecognized stores)
+        counts["retailer_flipp"] = max(0, counts["retailer_products"] - recognized_total)
     except Exception as e:
         log_warning(f"Count failed for retailer_products: {e}")
         counts["retailer_products"] = 0
-        counts["retailer_amazon"] = 0
+        for count_key in _RETAILER_URL_PATTERNS:
+            counts[count_key] = 0
         counts["retailer_flipp"] = 0
 
     # Costco user photos — by source
@@ -459,23 +486,20 @@ def get_filters():
     if counts.get("retailer_flipp", 0) > 0:
         sources_by_category["dealAggregators"].append({"value": "flipp", "label": "Flipp Flyers", "count": counts["retailer_flipp"]})
 
-    # Amazon — dedicated Amazon scrapers and price trackers
-    if counts.get("amazon_ca_deals", 0) > 0:
-        sources_by_category["amazon"].append({"value": "amazon_ca", "label": "Amazon.ca Deals", "count": counts["amazon_ca_deals"]})
+    # Amazon — unified source from retailer_products (scraper writes to unified table since ~Jan 30)
     if counts.get("retailer_amazon", 0) > 0:
-        sources_by_category["amazon"].append({"value": "amazon", "label": "Amazon Price Tracker", "count": counts["retailer_amazon"]})
+        sources_by_category["amazon"].append({"value": "amazon_ca", "label": "Amazon.ca Deals", "count": counts["retailer_amazon"]})
 
-    # Store Scrapers — individual retailer scrapers
+    # Store Scrapers — counts from retailer_products (unified mode)
     store_scraper_sources = [
-        ("cabelas_ca_deals",       "cabelas_ca",      "Cabela's Canada"),
-        ("frank_and_oak_deals",    "frank_and_oak",    "Frank & Oak"),
-        ("leons_deals",            "leons",            "Leon's"),
-        ("mastermind_toys_deals",  "mastermind_toys",  "Mastermind Toys"),
-        ("reebok_ca_deals",        "reebok_ca",        "Reebok Canada"),
-        ("the_brick_deals",        "the_brick",        "The Brick"),
+        ("retailer_leons",           "leons",            "Leon's"),
+        ("retailer_the_brick",       "the_brick",        "The Brick"),
+        ("retailer_frank_and_oak",   "frank_and_oak",    "Frank & Oak"),
+        ("retailer_reebok_ca",       "reebok_ca",        "Reebok Canada"),
+        ("retailer_mastermind_toys", "mastermind_toys",   "Mastermind Toys"),
     ]
-    for table_key, value, label in store_scraper_sources:
-        c = counts.get(table_key, 0)
+    for count_key, value, label in store_scraper_sources:
+        c = counts.get(count_key, 0)
         if c > 0:
             sources_by_category["storeScrapers"].append({"value": value, "label": label, "count": c})
 
@@ -775,7 +799,10 @@ def get_products():
 
     # ── Query retailer_products (excluding CocoPriceTracker) ──
     # Include if no source filter, or if any retailer-relevant source is selected
-    include_retailer = not sources or any(s.lower() in ("amazon", "leons", "retailer", "flipp") for s in sources)
+    include_retailer = not sources or any(s.lower() in (
+        "amazon_ca", "amazon", "leons", "the_brick", "frank_and_oak",
+        "reebok_ca", "mastermind_toys", "retailer", "flipp"
+    ) for s in sources)
     if include_retailer:
         try:
             query = sb.table("retailer_products").select("*").not_contains("extra_data", {"source": "cocopricetracker.ca"})

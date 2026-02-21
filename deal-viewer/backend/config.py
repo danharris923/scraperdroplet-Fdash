@@ -276,13 +276,9 @@ def get_supabase():
 # -----------------------------------------------
 DEAL_TABLES = [
     {"name": "deals",                  "source": None,              "date_col": "date_added",   "title_col": "title", "store_col": "store"},
-    {"name": "amazon_ca_deals",        "source": "amazon_ca",       "date_col": "created_at",   "title_col": "title", "store_col": "store"},
-    {"name": "cabelas_ca_deals",       "source": "cabelas_ca",      "date_col": "created_at",   "title_col": "title", "store_col": "store"},
-    {"name": "frank_and_oak_deals",    "source": "frank_and_oak",   "date_col": "created_at",   "title_col": "title", "store_col": "store"},
-    {"name": "leons_deals",            "source": "leons",           "date_col": "created_at",   "title_col": "title", "store_col": "store"},
-    {"name": "mastermind_toys_deals",  "source": "mastermind_toys", "date_col": "created_at",   "title_col": "title", "store_col": "store"},
-    {"name": "reebok_ca_deals",        "source": "reebok_ca",       "date_col": "created_at",   "title_col": "title", "store_col": "store"},
-    {"name": "the_brick_deals",        "source": "the_brick",       "date_col": "created_at",   "title_col": "title", "store_col": "store"},
+    # Legacy per-store deal tables REMOVED — all scrapers now write to retailer_products (unified mode since ~Jan 30).
+    # Removed: amazon_ca_deals, cabelas_ca_deals, frank_and_oak_deals, leons_deals,
+    #          mastermind_toys_deals, reebok_ca_deals, the_brick_deals
     {"name": "yepsavings_deals",       "source": "yepsavings",      "date_col": "created_date", "title_col": "title", "store_col": "store_name"},
 ]
 
@@ -293,9 +289,8 @@ SOURCE_LABELS = {
     "rfd": "RedFlagDeals",
     "yepsavings": "YepSavings",
     "flipp": "Flipp Flyers",
-    # Amazon scrapers
-    "amazon_ca": "Amazon.ca Deals",       # our own Amazon.ca scraper ("bubble scraper")
-    "amazon": "Amazon Price Tracker",      # Keepa/Flipp Amazon price tracking data
+    # Amazon — unified source from retailer_products
+    "amazon_ca": "Amazon.ca Deals",
     # Individual store scrapers
     "cabelas_ca": "Cabela's Canada",
     "frank_and_oak": "Frank & Oak",
