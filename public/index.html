@@ -1,156 +1,732 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deal Viewer — Scraper Dashboard</title>
-    <link rel="stylesheet" href="/css/style.css">
-    <!-- Favicon: shopping bag emoji -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128722;</text></svg>">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deals</title>
+<style>
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f1117; --bg2: #1a1d27; --bg3: #242833; --bg4: #2e3240;
+  --text: #e4e4e7; --text2: #a1a1aa; --text3: #71717a;
+  --accent: #22d3ee; --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+  --blue: #3b82f6; --purple: #a855f7;
+  --radius: 8px;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+a { color: var(--accent); text-decoration: none; }
+
+/* ── Top Bar ── */
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--bg2); border-bottom: 1px solid var(--bg3);
+  padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.topbar h1 { font-size: 18px; font-weight: 700; color: var(--accent); margin-right: 8px; white-space: nowrap; }
+
+/* Store toggle buttons */
+.store-btn {
+  padding: 5px 12px; border-radius: 20px; border: 1px solid var(--bg4);
+  background: var(--bg3); color: var(--text2); font-size: 13px; cursor: pointer;
+  transition: all 0.15s; white-space: nowrap;
+}
+.store-btn:hover { border-color: var(--accent); color: var(--text); }
+.store-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+.store-btn .count { font-size: 11px; opacity: 0.7; margin-left: 4px; }
+
+/* Search */
+.search-box {
+  margin-left: auto; position: relative;
+}
+.search-box input {
+  background: var(--bg3); border: 1px solid var(--bg4); border-radius: var(--radius);
+  padding: 6px 12px 6px 32px; color: var(--text); font-size: 13px; width: 200px;
+  outline: none; transition: border-color 0.15s;
+}
+.search-box input:focus { border-color: var(--accent); }
+.search-box::before {
+  content: '\1F50D'; position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  font-size: 13px; opacity: 0.5;
+}
+
+/* Dropdowns */
+.filter-select {
+  background: var(--bg3); border: 1px solid var(--bg4); border-radius: var(--radius);
+  padding: 6px 10px; color: var(--text); font-size: 13px; cursor: pointer; outline: none;
+}
+.filter-select:focus { border-color: var(--accent); }
+
+/* ── Status Bar ── */
+.status-bar {
+  padding: 8px 20px; background: var(--bg); border-bottom: 1px solid var(--bg3);
+  font-size: 13px; color: var(--text2); display: flex; align-items: center; gap: 8px;
+}
+.status-bar .count { color: var(--text); font-weight: 600; }
+.status-bar .time { color: var(--text3); }
+
+/* ── Product Grid ── */
+.grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px; padding: 20px; max-width: 1400px; margin: 0 auto;
+}
+
+/* ── Product Card ── */
+.card {
+  background: var(--bg2); border: 1px solid var(--bg3); border-radius: var(--radius);
+  overflow: hidden; cursor: pointer; transition: border-color 0.15s, transform 0.15s;
+}
+.card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.card-img {
+  width: 100%; height: 180px; object-fit: contain; background: #fff; padding: 8px;
+}
+.card-img-placeholder {
+  width: 100%; height: 180px; background: var(--bg3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 48px; color: var(--text3);
+}
+.card-body { padding: 12px; }
+.card-title {
+  font-size: 13px; font-weight: 500; line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  min-height: 36px; color: var(--text);
+}
+.card-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.card-store {
+  font-size: 11px; background: var(--bg4); padding: 2px 8px; border-radius: 10px; color: var(--text2);
+}
+.card-time { font-size: 11px; color: var(--text3); }
+.card-price { display: flex; align-items: baseline; gap: 6px; margin-top: 8px; }
+.card-price .current { font-size: 16px; font-weight: 700; color: var(--text); }
+.card-price .original { font-size: 12px; color: var(--text3); text-decoration: line-through; }
+.card-discount {
+  display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 6px;
+  border-radius: 4px; margin-top: 6px;
+}
+.discount-ok     { background: rgba(34,197,94,0.15); color: var(--green); }
+.discount-good   { background: rgba(59,130,246,0.15); color: var(--blue); }
+.discount-epic   { background: rgba(168,85,247,0.15); color: var(--purple); }
+.discount-legend { background: rgba(234,179,8,0.15); color: var(--yellow); }
+
+/* ── Pagination ── */
+.pagination {
+  display: flex; justify-content: center; align-items: center; gap: 4px;
+  padding: 20px; flex-wrap: wrap;
+}
+.page-btn {
+  padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--bg4);
+  background: var(--bg2); color: var(--text2); font-size: 13px; cursor: pointer;
+}
+.page-btn:hover { border-color: var(--accent); color: var(--text); }
+.page-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.page-btn:disabled { opacity: 0.3; cursor: default; }
+.page-ellipsis { color: var(--text3); padding: 0 4px; }
+
+/* ── Loading & Empty ── */
+.loading, .empty-state {
+  text-align: center; padding: 80px 20px; color: var(--text3);
+}
+.loading::after {
+  content: ''; display: block; width: 32px; height: 32px; margin: 16px auto;
+  border: 3px solid var(--bg4); border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty-state { font-size: 15px; }
+
+/* ── Modal Overlay ── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+  overflow-y: auto; padding: 40px 20px;
+}
+.modal-overlay.open { display: flex; justify-content: center; align-items: flex-start; }
+.modal {
+  background: var(--bg2); border: 1px solid var(--bg3); border-radius: 12px;
+  max-width: 700px; width: 100%; position: relative; animation: modalIn 0.2s ease-out;
+}
+@keyframes modalIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+.modal-close {
+  position: absolute; top: 12px; right: 12px; width: 32px; height: 32px;
+  border-radius: 50%; border: none; background: var(--bg4); color: var(--text2);
+  font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  z-index: 1;
+}
+.modal-close:hover { background: var(--red); color: #fff; }
+.modal-img {
+  width: 100%; max-height: 300px; object-fit: contain; background: #fff; padding: 16px;
+  border-radius: 12px 12px 0 0;
+}
+.modal-body { padding: 20px; }
+.modal-title { font-size: 18px; font-weight: 600; line-height: 1.4; margin-bottom: 12px; }
+.modal-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.modal-badge {
+  font-size: 12px; background: var(--bg4); padding: 3px 10px; border-radius: 12px; color: var(--text2);
+}
+.modal-price-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.modal-price-row .current { font-size: 28px; font-weight: 700; }
+.modal-price-row .original { font-size: 16px; color: var(--text3); text-decoration: line-through; }
+.modal-discount {
+  font-size: 14px; font-weight: 700; padding: 3px 10px; border-radius: 6px; margin-bottom: 16px;
+  display: inline-block;
+}
+.modal-dates { font-size: 13px; color: var(--text3); margin-bottom: 20px; }
+.modal-dates span { color: var(--text2); }
+
+/* Price chart */
+.chart-section { margin-top: 16px; }
+.chart-header { font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text2); }
+.chart-container { background: var(--bg); border-radius: var(--radius); padding: 16px; }
+.chart-container svg { width: 100%; height: auto; }
+
+/* View deal button */
+.view-deal {
+  display: inline-block; margin-top: 16px; padding: 10px 24px;
+  background: var(--accent); color: var(--bg); font-weight: 600; font-size: 14px;
+  border-radius: var(--radius); border: none; cursor: pointer; text-decoration: none;
+}
+.view-deal:hover { opacity: 0.9; }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .topbar { padding: 10px 12px; gap: 8px; }
+  .search-box input { width: 140px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; padding: 12px; }
+  .card-img, .card-img-placeholder { height: 140px; }
+  .modal { margin: 0 8px; }
+}
+</style>
 </head>
 <body>
 
-    <!-- ═══════════════════════════════════════
-         HEADER
-         ═══════════════════════════════════════ -->
-    <header class="app-header">
-        <div class="header-left">
-            <button id="sidebar-toggle" class="header-btn" title="Toggle filters">&#9776;</button>
-            <span class="app-logo">Deal Viewer</span>
-            <span class="app-subtitle">Scraper Dashboard</span>
+<!-- Top Bar: title + store buttons + search + filters -->
+<div class="topbar" id="topbar">
+  <h1>Deals</h1>
+  <div id="store-buttons"></div>
+  <div class="search-box">
+    <input type="text" id="search-input" placeholder="Search deals...">
+  </div>
+  <select class="filter-select" id="discount-filter">
+    <option value="0">Any discount</option>
+    <option value="10">10%+ off</option>
+    <option value="25">25%+ off</option>
+    <option value="50">50%+ off</option>
+    <option value="75">75%+ off</option>
+  </select>
+  <select class="filter-select" id="date-filter">
+    <option value="">All time</option>
+    <option value="1">Today</option>
+    <option value="7">7 days</option>
+    <option value="30">30 days</option>
+  </select>
+</div>
+
+<!-- Status bar -->
+<div class="status-bar" id="status-bar">Loading...</div>
+
+<!-- Product grid -->
+<div class="grid" id="product-grid"></div>
+
+<!-- Pagination -->
+<div class="pagination" id="pagination"></div>
+
+<!-- Detail modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+const state = {
+  stores: [],           // available stores from /api/filters
+  selectedSources: [],  // active source filter values
+  search: '',
+  minDiscount: 0,
+  days: null,           // null = all time
+  page: 1,
+  perPage: 24,
+  totalProducts: 0,
+  totalPages: 1,
+  loading: false,
+};
+
+// Debounce helper
+function debounce(fn, ms) {
+  let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+// ══════════════════════════════════════════════
+// API
+// ══════════════════════════════════════════════
+const API_BASE = '/api';
+
+async function apiFetch(path, params = {}) {
+  // Strip empty/null params
+  const clean = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== null && v !== undefined && v !== '' && v !== 0) clean[k] = v;
+  }
+  const qs = new URLSearchParams(clean).toString();
+  const url = `${API_BASE}${path}${qs ? '?' + qs : ''}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`API ${resp.status}: ${resp.statusText}`);
+  return resp.json();
+}
+
+// ══════════════════════════════════════════════
+// FORMATTING HELPERS
+// ══════════════════════════════════════════════
+function formatPrice(p) {
+  if (p == null) return '';
+  return '$' + Number(p).toFixed(2);
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return days + 'd ago';
+  return Math.floor(days / 30) + 'mo ago';
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function discountClass(pct) {
+  if (pct >= 75) return 'discount-legend';
+  if (pct >= 50) return 'discount-epic';
+  if (pct >= 25) return 'discount-good';
+  return 'discount-ok';
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// ══════════════════════════════════════════════
+// INIT: Load filters, then products
+// ══════════════════════════════════════════════
+async function init() {
+  try {
+    const data = await apiFetch('/filters');
+    state.stores = data.stores || [];
+    renderStoreButtons();
+    await loadProducts();
+  } catch (e) {
+    document.getElementById('status-bar').textContent = 'Failed to connect to API: ' + e.message;
+    document.getElementById('product-grid').innerHTML = '<div class="empty-state">Could not load data. Is the API server running?</div>';
+  }
+}
+
+// ══════════════════════════════════════════════
+// STORE BUTTONS
+// ══════════════════════════════════════════════
+function renderStoreButtons() {
+  const container = document.getElementById('store-buttons');
+  container.innerHTML = '';
+  // Fragment for performance
+  const frag = document.createDocumentFragment();
+  for (const s of state.stores) {
+    const btn = document.createElement('button');
+    btn.className = 'store-btn';
+    btn.dataset.source = s.value;
+    btn.innerHTML = escapeHtml(s.label) + '<span class="count">' + s.count.toLocaleString() + '</span>';
+    btn.addEventListener('click', () => toggleSource(s.value));
+    frag.appendChild(btn);
+  }
+  container.appendChild(frag);
+  updateStoreButtonStates();
+}
+
+function toggleSource(value) {
+  const idx = state.selectedSources.indexOf(value);
+  if (idx >= 0) {
+    state.selectedSources.splice(idx, 1);
+  } else {
+    state.selectedSources.push(value);
+  }
+  state.page = 1;
+  updateStoreButtonStates();
+  loadProducts();
+}
+
+function updateStoreButtonStates() {
+  document.querySelectorAll('.store-btn').forEach(btn => {
+    btn.classList.toggle('active', state.selectedSources.includes(btn.dataset.source));
+  });
+}
+
+// ══════════════════════════════════════════════
+// FILTER EVENT HANDLERS
+// ══════════════════════════════════════════════
+document.getElementById('search-input').addEventListener('input', debounce(e => {
+  state.search = e.target.value.trim();
+  state.page = 1;
+  loadProducts();
+}, 350));
+
+document.getElementById('discount-filter').addEventListener('change', e => {
+  state.minDiscount = parseInt(e.target.value) || 0;
+  state.page = 1;
+  loadProducts();
+});
+
+document.getElementById('date-filter').addEventListener('change', e => {
+  state.days = e.target.value ? parseInt(e.target.value) : null;
+  state.page = 1;
+  loadProducts();
+});
+
+// ══════════════════════════════════════════════
+// LOAD PRODUCTS
+// ══════════════════════════════════════════════
+async function loadProducts() {
+  if (state.loading) return;
+  state.loading = true;
+
+  const grid = document.getElementById('product-grid');
+  grid.innerHTML = '<div class="loading">Loading deals...</div>';
+
+  try {
+    const params = {
+      page: state.page,
+      per_page: state.perPage,
+      sort_by: 'last_seen_at',
+      sort_order: 'desc',
+    };
+    if (state.selectedSources.length > 0) params.sources = state.selectedSources.join(',');
+    if (state.search) params.search = state.search;
+    if (state.minDiscount > 0) params.min_discount = state.minDiscount;
+    if (state.days) params.days = state.days;
+
+    const data = await apiFetch('/products', params);
+
+    state.totalProducts = data.total;
+    state.totalPages = data.total_pages;
+    state.page = data.page;
+
+    renderStatusBar(data);
+    renderGrid(data.products);
+    renderPagination();
+  } catch (e) {
+    grid.innerHTML = '<div class="empty-state">Error loading products: ' + escapeHtml(e.message) + '</div>';
+    document.getElementById('pagination').innerHTML = '';
+  } finally {
+    state.loading = false;
+  }
+}
+
+// ══════════════════════════════════════════════
+// STATUS BAR
+// ══════════════════════════════════════════════
+function renderStatusBar(data) {
+  const bar = document.getElementById('status-bar');
+  const sourceLabel = state.selectedSources.length > 0
+    ? state.selectedSources.map(s => {
+        const store = state.stores.find(st => st.value === s);
+        return store ? store.label : s;
+      }).join(', ')
+    : 'all stores';
+  const start = (data.page - 1) * data.per_page + 1;
+  const end = Math.min(start + data.products.length - 1, data.total);
+  bar.innerHTML = `Showing <span class="count">${start}-${end}</span> of <span class="count">${data.total.toLocaleString()}</span> deals from ${escapeHtml(sourceLabel)} <span class="time">(${data.query_time_ms}ms)</span>`;
+}
+
+// ══════════════════════════════════════════════
+// PRODUCT GRID
+// ══════════════════════════════════════════════
+function renderGrid(products) {
+  const grid = document.getElementById('product-grid');
+  if (!products.length) {
+    grid.innerHTML = '<div class="empty-state">No deals found matching your filters.</div>';
+    return;
+  }
+
+  grid.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  for (const p of products) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.addEventListener('click', () => showDetail(p.id));
+
+    const discount = p.discount_percent || 0;
+    let discountHtml = '';
+    if (discount > 0) {
+      discountHtml = `<div class="card-discount ${discountClass(discount)}">-${Math.round(discount)}%</div>`;
+    }
+
+    let imgHtml;
+    if (p.image_url) {
+      imgHtml = `<img class="card-img" src="${escapeHtml(p.image_url)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=card-img-placeholder>&#128722;</div>'">`;
+    } else {
+      imgHtml = '<div class="card-img-placeholder">&#128722;</div>';
+    }
+
+    const priceHtml = p.current_price
+      ? `<span class="current">${formatPrice(p.current_price)}</span>${p.original_price && p.original_price > p.current_price ? `<span class="original">${formatPrice(p.original_price)}</span>` : ''}`
+      : '<span class="current" style="color:var(--text3)">No price</span>';
+
+    card.innerHTML = `
+      ${imgHtml}
+      <div class="card-body">
+        <div class="card-title">${escapeHtml(p.title || 'Untitled')}</div>
+        <div class="card-meta">
+          <span class="card-store">${escapeHtml(p.store || '')}</span>
+          <span class="card-time">${timeAgo(p.last_seen_at)}</span>
         </div>
-        <div class="header-right">
-            <button id="auto-refresh-toggle" class="header-btn" title="Auto-refresh (60s)">&#8635; Auto</button>
-            <button class="header-btn" onclick="TableManager.exportCsv()" title="Export CSV">&#8615; CSV</button>
-            <button class="header-btn" onclick="TableManager.loadProducts()" title="Refresh (R)">&#8635; Refresh</button>
+        <div class="card-price">${priceHtml}</div>
+        ${discountHtml}
+      </div>`;
+    frag.appendChild(card);
+  }
+  grid.appendChild(frag);
+}
+
+// ══════════════════════════════════════════════
+// PAGINATION
+// ══════════════════════════════════════════════
+function renderPagination() {
+  const el = document.getElementById('pagination');
+  if (state.totalPages <= 1) { el.innerHTML = ''; return; }
+
+  const pages = [];
+  const current = state.page;
+  const total = state.totalPages;
+
+  // Always show first page
+  pages.push(1);
+  // Show pages around current
+  for (let i = Math.max(2, current - 2); i <= Math.min(total - 1, current + 2); i++) {
+    pages.push(i);
+  }
+  // Always show last page
+  if (total > 1) pages.push(total);
+
+  // Deduplicate and sort
+  const unique = [...new Set(pages)].sort((a, b) => a - b);
+
+  let html = `<button class="page-btn" ${current === 1 ? 'disabled' : ''} onclick="goToPage(${current - 1})">&lt;</button>`;
+  let prev = 0;
+  for (const p of unique) {
+    if (p - prev > 1) html += '<span class="page-ellipsis">...</span>';
+    html += `<button class="page-btn ${p === current ? 'active' : ''}" onclick="goToPage(${p})">${p}</button>`;
+    prev = p;
+  }
+  html += `<button class="page-btn" ${current === total ? 'disabled' : ''} onclick="goToPage(${current + 1})">&gt;</button>`;
+
+  el.innerHTML = html;
+}
+
+function goToPage(p) {
+  if (p < 1 || p > state.totalPages) return;
+  state.page = p;
+  loadProducts();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ══════════════════════════════════════════════
+// DETAIL MODAL
+// ══════════════════════════════════════════════
+const overlay = document.getElementById('modal-overlay');
+const modalEl = document.getElementById('modal');
+
+// Close modal on overlay click or Escape
+overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+function closeModal() {
+  overlay.classList.remove('open');
+  modalEl.innerHTML = '';
+}
+
+async function showDetail(productId) {
+  overlay.classList.add('open');
+  modalEl.innerHTML = '<div class="loading" style="padding:60px">Loading...</div>';
+
+  try {
+    const product = await apiFetch(`/product/${productId}`);
+    renderModal(product);
+  } catch (e) {
+    modalEl.innerHTML = `<div class="empty-state" style="padding:40px">Failed to load product details.<br><small>${escapeHtml(e.message)}</small></div>`;
+  }
+}
+
+function renderModal(p) {
+  const discount = p.discount_percent || 0;
+  let discountBadge = '';
+  if (discount > 0) {
+    discountBadge = `<div class="modal-discount ${discountClass(discount)}">-${Math.round(discount)}% off</div>`;
+  }
+
+  let imgHtml = '';
+  if (p.image_url) {
+    imgHtml = `<img class="modal-img" src="${escapeHtml(p.image_url)}" alt="" onerror="this.style.display='none'">`;
+  }
+
+  const priceHtml = p.current_price
+    ? `<span class="current">${formatPrice(p.current_price)}</span>${p.original_price && p.original_price > p.current_price ? `<span class="original">${formatPrice(p.original_price)}</span>` : ''}`
+    : '';
+
+  const history = p.price_history || [];
+  const chartHtml = history.length > 0 ? renderPriceChart(history) : '';
+
+  modalEl.innerHTML = `
+    <button class="modal-close" onclick="closeModal()">&times;</button>
+    ${imgHtml}
+    <div class="modal-body">
+      <div class="modal-title">${escapeHtml(p.title || 'Untitled')}</div>
+      <div class="modal-meta">
+        <span class="modal-badge">${escapeHtml(p.store || '')}</span>
+        ${p.category ? `<span class="modal-badge">${escapeHtml(p.category)}</span>` : ''}
+        ${p.brand ? `<span class="modal-badge">${escapeHtml(p.brand)}</span>` : ''}
+      </div>
+      <div class="modal-price-row">${priceHtml}</div>
+      ${discountBadge}
+      <div class="modal-dates">
+        First seen: <span>${formatDate(p.first_seen_at)}</span> &nbsp; Last seen: <span>${formatDate(p.last_seen_at)}</span>
+      </div>
+      ${chartHtml}
+      <a class="view-deal" href="${escapeHtml(p.affiliate_url || '#')}" target="_blank" rel="noopener">View Deal &rarr;</a>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+// SVG PRICE HISTORY CHART
+// ══════════════════════════════════════════════
+function renderPriceChart(history) {
+  if (!history.length) return '';
+
+  // Filter to entries with valid price
+  const points = history.filter(h => h.price != null).map(h => ({
+    price: Number(h.price),
+    date: new Date(h.scraped_at),
+    dateStr: h.scraped_at,
+    onSale: h.is_on_sale,
+  }));
+
+  if (points.length === 0) return '';
+
+  // Single data point -- just show the price
+  if (points.length === 1) {
+    const pt = points[0];
+    return `
+      <div class="chart-section">
+        <div class="chart-header">Price History (1 data point)</div>
+        <div class="chart-container" style="text-align:center;padding:30px;">
+          <div style="font-size:24px;font-weight:700;">${formatPrice(pt.price)}</div>
+          <div style="font-size:13px;color:var(--text3);margin-top:4px;">${formatDate(pt.dateStr)}</div>
         </div>
-    </header>
+      </div>`;
+  }
 
-    <!-- ═══════════════════════════════════════
-         STATS BAR
-         ═══════════════════════════════════════ -->
-    <div class="stats-bar">
-        <div class="stat-item">
-            <span>Products</span>
-            <span class="stat-value" id="stat-total">—</span>
-        </div>
-        <div class="stat-item">
-            <span>Stores</span>
-            <span class="stat-value" id="stat-stores">—</span>
-        </div>
-        <div class="stat-item">
-            <span>Added Today</span>
-            <span class="stat-value" id="stat-today">—</span>
-        </div>
-        <div class="stat-item">
-            <span>On Sale</span>
-            <span class="stat-value" id="stat-sale">—</span>
-        </div>
-    </div>
+  // Chart dimensions
+  const W = 640, H = 220;
+  const pad = { top: 20, right: 20, bottom: 40, left: 60 };
+  const cw = W - pad.left - pad.right;
+  const ch = H - pad.top - pad.bottom;
 
-    <!-- ═══════════════════════════════════════
-         TABS (Products / Price Tracker)
-         ═══════════════════════════════════════ -->
-    <div class="tabs-bar">
-        <button class="tab-btn active" data-tab="products">Products</button>
-        <button class="tab-btn" data-tab="price-tracker">Price Tracker</button>
-    </div>
+  // Scales
+  const prices = points.map(p => p.price);
+  let minP = Math.min(...prices);
+  let maxP = Math.max(...prices);
+  // Add 10% padding to price range
+  const pRange = maxP - minP || 1;
+  minP = Math.max(0, minP - pRange * 0.1);
+  maxP = maxP + pRange * 0.1;
 
-    <!-- ═══════════════════════════════════════
-         BODY: Sidebar + Main Content
-         ═══════════════════════════════════════ -->
-    <div class="app-body">
+  const minT = points[0].date.getTime();
+  const maxT = points[points.length - 1].date.getTime();
+  const tRange = maxT - minT || 1;
 
-        <!-- ── Filter Sidebar ──────────────── -->
-        <aside class="filter-sidebar" id="filter-sidebar">
-            <div class="sidebar-header">
-                <span class="sidebar-title">Filters</span>
-                <button class="sidebar-clear" onclick="FilterManager.clearAll()">Clear All</button>
-            </div>
-            <div id="filter-sidebar-content">
-                <!-- Rendered by FilterManager.render() -->
-            </div>
-        </aside>
+  function x(date) { return pad.left + ((date.getTime() - minT) / tRange) * cw; }
+  function y(price) { return pad.top + ch - ((price - minP) / (maxP - minP)) * ch; }
 
-        <!-- ── Main Content ────────────────── -->
-        <main class="main-content">
+  // Build polyline
+  const linePoints = points.map(p => `${x(p.date).toFixed(1)},${y(p.price).toFixed(1)}`).join(' ');
+  // Area fill (closed polygon down to bottom)
+  const areaPoints = linePoints + ` ${x(points[points.length-1].date).toFixed(1)},${(pad.top + ch).toFixed(1)} ${x(points[0].date).toFixed(1)},${(pad.top + ch).toFixed(1)}`;
 
-            <!-- Products Tab -->
-            <div id="products-tab">
-                <!-- Active filter badges -->
-                <div id="active-filters" class="active-filters"></div>
+  // Grid lines (5 horizontal)
+  let gridLines = '';
+  const steps = 4;
+  for (let i = 0; i <= steps; i++) {
+    const pVal = minP + (maxP - minP) * (i / steps);
+    const yPos = y(pVal);
+    gridLines += `<line x1="${pad.left}" y1="${yPos.toFixed(1)}" x2="${W - pad.right}" y2="${yPos.toFixed(1)}" stroke="var(--bg3)" stroke-width="1"/>`;
+    gridLines += `<text x="${pad.left - 8}" y="${(yPos + 4).toFixed(1)}" text-anchor="end" fill="var(--text3)" font-size="11">$${pVal.toFixed(0)}</text>`;
+  }
 
-                <!-- Results info bar -->
-                <div class="results-bar">
-                    <div id="results-info"></div>
-                </div>
+  // Date labels on X axis (show ~4 dates)
+  let dateLabels = '';
+  const dateCount = Math.min(points.length, 5);
+  const dateStep = Math.max(1, Math.floor(points.length / (dateCount - 1)));
+  const shownDates = new Set();
+  for (let i = 0; i < points.length; i += dateStep) {
+    const p = points[i];
+    const label = p.date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+    if (!shownDates.has(label)) {
+      shownDates.add(label);
+      dateLabels += `<text x="${x(p.date).toFixed(1)}" y="${H - 5}" text-anchor="middle" fill="var(--text3)" font-size="11">${label}</text>`;
+    }
+  }
+  // Always show last date
+  const lastP = points[points.length - 1];
+  const lastLabel = lastP.date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+  if (!shownDates.has(lastLabel)) {
+    dateLabels += `<text x="${x(lastP.date).toFixed(1)}" y="${H - 5}" text-anchor="middle" fill="var(--text3)" font-size="11">${lastLabel}</text>`;
+  }
 
-                <!-- Product Table -->
-                <div class="table-container">
-                    <table class="product-table">
-                        <thead>
-                            <tr>
-                                <th class="col-image"></th>
-                                <th class="col-title">Product</th>
-                                <th class="col-price">Price</th>
-                                <th class="col-discount">Discount</th>
-                                <th class="col-category">Category</th>
-                                <th class="col-region">Region</th>
-                                <th class="col-time">Updated</th>
-                                <th class="col-link"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="product-table-body">
-                            <!-- Rendered by TableManager -->
-                        </tbody>
-                    </table>
-                </div>
+  // Data point dots -- green for on-sale, accent for regular
+  let dots = '';
+  // Tooltip areas (invisible rects for hover)
+  let tooltipAreas = '';
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const cx = x(p.date).toFixed(1);
+    const cy = y(p.price).toFixed(1);
+    const color = p.onSale ? 'var(--green)' : 'var(--accent)';
+    dots += `<circle cx="${cx}" cy="${cy}" r="4" fill="${color}" stroke="var(--bg2)" stroke-width="2"/>`;
+    // Tooltip: show on hover via title element
+    const tipDate = p.date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+    dots += `<circle cx="${cx}" cy="${cy}" r="12" fill="transparent" style="cursor:pointer"><title>${formatPrice(p.price)} - ${tipDate}${p.onSale ? ' (On Sale)' : ''}</title></circle>`;
+  }
 
-                <!-- Pagination -->
-                <div id="pagination" class="pagination"></div>
-            </div>
+  return `
+    <div class="chart-section">
+      <div class="chart-header">Price History (${points.length} data points)</div>
+      <div class="chart-container">
+        <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.3"/>
+              <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          ${gridLines}
+          <polygon points="${areaPoints}" fill="url(#chartGrad)"/>
+          <polyline points="${linePoints}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+          ${dateLabels}
+          ${dots}
+        </svg>
+      </div>
+    </div>`;
+}
 
-            <!-- Price Tracker Tab (hidden by default) -->
-            <div id="price-tracker-tab" style="display: none;">
-                <div id="price-tracker-content">
-                    <!-- Rendered by TableManager.loadPriceTracker() -->
-                </div>
-            </div>
-
-        </main>
-    </div>
-
-    <!-- ═══════════════════════════════════════
-         KEYBOARD SHORTCUTS FOOTER
-         ═══════════════════════════════════════ -->
-    <footer class="shortcuts-bar">
-        <span><span class="shortcut-key">/</span> Search</span>
-        <span><span class="shortcut-key">&#8592;</span><span class="shortcut-key">&#8594;</span> Pages</span>
-        <span><span class="shortcut-key">Esc</span> Close</span>
-        <span><span class="shortcut-key">R</span> Refresh</span>
-        <span><span class="shortcut-key">E</span> Export CSV</span>
-    </footer>
-
-    <!-- ═══════════════════════════════════════
-         PRODUCT DETAIL MODAL
-         ═══════════════════════════════════════ -->
-    <div id="product-modal" class="modal-overlay">
-        <div class="modal-box">
-            <button id="modal-close" class="modal-close" title="Close (Esc)">&times;</button>
-            <div class="modal-body" id="modal-content">
-                <!-- Rendered by TableManager.showDetail() -->
-            </div>
-        </div>
-    </div>
-
-    <!-- ═══════════════════════════════════════
-         SCRIPTS (order matters: utils → api → filters → table → app)
-         ═══════════════════════════════════════ -->
-    <script src="/js/utils.js"></script>
-    <script src="/js/api.js"></script>
-    <script src="/js/filters.js"></script>
-    <script src="/js/table.js"></script>
-    <script src="/js/app.js"></script>
-
+// ══════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════
+init();
+</script>
 </body>
 </html>

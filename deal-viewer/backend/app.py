@@ -1,33 +1,28 @@
 """
-app.py — Flask API server for the Deal Viewer.
-Queries 12+ Supabase tables, normalizes into a unified Product format,
-and serves everything over a clean REST API.
+app.py -- Simplified Deal Viewer API.
+Queries ONLY retailer_products table from Supabase, normalizes into a unified
+Product format, and serves everything over a clean REST API.
 
 Endpoints:
-  GET /api/health       — Health check + DB connection test
-  GET /api/filters      — Dynamic filter options with counts (5-min cache)
-  GET /api/stats        — Dashboard summary stats (60s cache)
-  GET /api/products     — Multi-table paginated product query with all filters
-  GET /api/product/<id> — Single product detail with price history
-  GET /api/product/<id>/history — Full price history + computed stats
-  GET /api/price-tracker — Price drops feed, most tracked, biggest drops
-  GET /api/scrapers     — Proxy to droplet API for scraper statuses
+  GET /api/health            -- Health check + DB connection test
+  GET /api/filters           -- Store list with counts (5-min cache)
+  GET /api/stats             -- Active product count (60s cache)
+  GET /api/products          -- Paginated product query with filters
+  GET /api/product/<id>      -- Single product detail with price history
+  GET /api/product/<id>/history -- Full price history + computed stats
 """
 
 import os
-import re
 import time
-import traceback
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
-import requests
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 from config import (
-    get_supabase, DEAL_TABLES, SOURCE_LABELS,
-    DROPLET_API_URL, FLASK_PORT, FLASK_DEBUG,
+    get_supabase,
+    FLASK_PORT, FLASK_DEBUG,
     cache,
     log_success, log_warning, log_error, log_info, log_debug, log_timing,
     timed,
@@ -37,9 +32,9 @@ from config import (
 # Flask app setup
 # ──────────────────────────────────────────────
 app = Flask(__name__, static_folder=None)
-CORS(app)  # Allow all origins for local dev
+CORS(app)
 
-# Path to frontend files (served statically in local dev only — Vercel serves from public/)
+# Path to frontend files (served statically in local dev only -- Vercel serves from public/)
 if not os.getenv("VERCEL"):
     FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
 
@@ -70,13 +65,11 @@ def after_request_log(response):
 
 
 # ══════════════════════════════════════════════
-# NORMALIZATION FUNCTIONS
-# Port of route.ts lines 206-348 — converts each table's
-# schema into a unified Product dict.
+# NORMALIZATION
 # ══════════════════════════════════════════════
 
 def _calc_discount(current, original, stored_discount):
-    """Calculate discount percent — use stored value, or compute from prices if missing."""
+    """Calculate discount percent -- use stored value, or compute from prices if missing."""
     if stored_discount is not None and stored_discount > 0:
         return stored_discount
     try:
@@ -89,164 +82,40 @@ def _calc_discount(current, original, stored_discount):
     return stored_discount or 0
 
 
-# Regex patterns for Amazon deal badge text that the scraper stores as titles
-# Examples: "75% offLimited-time deal", "60% offLightning Deal", "Limited-time deal"
-_BADGE_PREFIXES = re.compile(
-    r"^\d+%\s*off",   # "75% off" or "60%off" at start of title
-    re.IGNORECASE,
-)
-_BADGE_SUFFIXES = re.compile(
-    r"(Limited[- ]time deal|Lightning Deal|Best Seller|Prime Early Access|Deal of the Day|"
-    r"Climate Pledge Friendly|Amazon'?s?\s*Choice|Sponsored|Top Deal|Overall Pick)$",
-    re.IGNORECASE,
-)
-_JUNK_TITLE = re.compile(
-    r"^(\d+%\s*off)?\s*(Limited[- ]time deal|Lightning Deal|Deal of the Day|Top Deal|"
-    r"Best Seller|Sponsored|Overall Pick)\s*$",
-    re.IGNORECASE,
-)
-
-
-def _clean_title(raw_title, row, table_name):
-    """
-    Clean up product titles — detects Amazon deal badge text that the scraper
-    mistakenly captures as the title (e.g. "75% offLimited-time deal") and
-    replaces it with something useful.
-
-    Fallback chain:
-      1. Strip badge prefix/suffix, keep remaining real title text
-      2. Use the brand field if present
-      3. Use ASIN from product_id or metadata
-      4. Use the URL domain + "Deal"
-    """
-    title = (raw_title or "").strip()
-
-    # Check if the entire title is junk (badge-only, nothing useful)
-    if not title or _JUNK_TITLE.match(title):
-        # Entire title is badge text — build a fallback title
-        return _fallback_title(row, table_name)
-
-    # Strip badge prefix: "75% offSome Real Product" → "Some Real Product"
-    cleaned = _BADGE_PREFIXES.sub("", title).strip()
-    # Strip badge suffix: "Real Product Limited-time deal" → "Real Product"
-    cleaned = _BADGE_SUFFIXES.sub("", cleaned).strip()
-
-    # If stripping left us with nothing useful (< 3 chars), use fallback
-    if len(cleaned) < 3:
-        return _fallback_title(row, table_name)
-
-    return cleaned
-
-
-def _fallback_title(row, table_name):
-    """
-    Build a display title when the real product title is missing or junk.
-    Uses brand, ASIN, or URL to create something meaningful.
-    """
-    parts = []
-
-    # Try brand
-    brand = row.get("brand")
-    if brand and brand.strip():
-        parts.append(brand.strip())
-
-    # Try ASIN from product_id (amazon_ca_deals stores ASIN here)
-    asin = row.get("product_id") or ""
-    if not asin:
-        # Try metadata dict for asin key
-        meta = row.get("metadata")
-        if isinstance(meta, dict):
-            asin = meta.get("asin", "")
-        elif isinstance(meta, str):
-            # metadata stored as string repr: "{'asin': 'B0FZHZRPMR'}"
-            m = re.search(r"'asin'\s*:\s*'([A-Z0-9]+)'", meta)
-            if m:
-                asin = m.group(1)
-
-    if asin:
-        parts.append(f"ASIN: {asin}")
-    elif row.get("clean_url") or row.get("url"):
-        # Extract something from the URL as last resort
-        url = row.get("clean_url") or row.get("url") or ""
-        try:
-            domain = urlparse(url).hostname or ""
-            domain = domain.replace("www.", "")
-            if domain:
-                parts.append(f"({domain})")
-        except Exception:
-            pass
-
-    if parts:
-        return " - ".join(parts)
-
-    # Absolute fallback: use table name + row ID
-    row_id = row.get("id", "?")
-    source_label = table_name.replace("_deals", "").replace("_", " ").title()
-    return f"{source_label} Deal #{row_id}"
-
-
-def normalize_deal(row, table_name, table_source):
-    """Normalize a row from any deals table (deals, amazon_ca_deals, etc.)."""
-    source = row.get("source") or table_source or table_name.replace("_deals", "")
-    current_price = row.get("current_price") or row.get("price")
-    original_price = row.get("original_price")
-    # Clean title — strips deal badge text like "75% offLimited-time deal"
-    raw_title = row.get("title") or row.get("name") or ""
-    title = _clean_title(raw_title, row, table_name)
-    return {
-        "id": f"{table_name}_{row['id']}",
-        "title": title,
-        "brand": row.get("brand"),
-        "store": row.get("store") or row.get("store_name") or table_source or "Unknown",
-        "source": source,
-        "image_url": row.get("image_blob_url") or row.get("image_url") or row.get("thumbnail_url"),
-        "current_price": current_price,
-        "original_price": original_price,
-        "discount_percent": _calc_discount(current_price, original_price, row.get("discount_percent")),
-        "category": row.get("category"),
-        "region": row.get("region"),
-        "affiliate_url": row.get("affiliate_url") or row.get("url") or row.get("product_url") or "#",
-        "is_active": row.get("is_active", True),
-        "first_seen_at": row.get("date_added") or row.get("created_at") or row.get("created_date") or row.get("first_seen_at"),
-        "last_seen_at": row.get("date_updated") or row.get("updated_at") or row.get("last_seen_at") or row.get("created_at") or row.get("created_date"),
-    }
+# Hostname -> (display_name, source_key) mapping for retailer_products
+_HOST_SOURCE_MAP = {
+    "amazon":         ("Amazon",           "amazon_ca"),
+    "leons":          ("Leon's",           "leons"),
+    "thebrick":       ("The Brick",        "the_brick"),
+    "frankandoak":    ("Frank & Oak",      "frank_and_oak"),
+    "reebok":         ("Reebok",           "reebok_ca"),
+    "mastermindtoys": ("Mastermind Toys",  "mastermind_toys"),
+    "cabelas":        ("Cabela's",         "cabelas_ca"),
+}
 
 
 def normalize_retailer(row):
-    """Normalize a row from retailer_products (excluding CocoPriceTracker)."""
+    """Normalize a row from retailer_products into a unified product dict."""
     images = row.get("images") or []
     thumbnail = row.get("thumbnail_url", "")
-    # Use first image, fallback to thumbnail if it's not a logo
     image_url = images[0] if images else (thumbnail if thumbnail and "LogoMobile" not in thumbnail else None)
 
     # Derive store/source from retailer_sku or affiliate_url
-    # Source values are LOWERCASE to match filter system values exactly
     store = "Unknown"
-    source = "flipp"  # default source — Flipp flyer data
+    source = "flipp"  # default -- Flipp flyer data
 
     sku = row.get("retailer_sku") or ""
     if "_" in sku:
         store = sku.split("_")[0]
-        # Also set source based on store name from the sku
         store_lower = store.lower()
         if "amazon" in store_lower:
             source = "amazon_ca"
         elif "leons" in store_lower:
             source = "leons"
-        # else stays "flipp" (default)
     elif row.get("affiliate_url"):
         try:
             parsed = urlparse(row["affiliate_url"])
             hostname = parsed.hostname.replace("www.", "") if parsed.hostname else ""
-            # Map hostname to source/store — these match the filter source values
-            _HOST_SOURCE_MAP = {
-                "amazon":       ("Amazon",          "amazon_ca"),
-                "leons":        ("Leon's",          "leons"),
-                "thebrick":     ("The Brick",       "the_brick"),
-                "frankandoak":  ("Frank & Oak",     "frank_and_oak"),
-                "reebok":       ("Reebok",          "reebok_ca"),
-                "mastermindtoys": ("Mastermind Toys", "mastermind_toys"),
-            }
             matched = False
             for key, (s_name, s_source) in _HOST_SOURCE_MAP.items():
                 if key in hostname:
@@ -256,7 +125,7 @@ def normalize_retailer(row):
             if not matched:
                 domain = hostname.split(".")[0]
                 store = domain.capitalize()
-                source = "flipp"  # unrecognized retailer products default to Flipp
+                source = "flipp"
         except Exception:
             pass
 
@@ -273,67 +142,7 @@ def normalize_retailer(row):
         "original_price": orig,
         "discount_percent": _calc_discount(cur, orig, row.get("sale_percentage") or row.get("discount_percent")),
         "category": row.get("retailer_category"),
-        "region": row.get("region"),
         "affiliate_url": row.get("affiliate_url") or row.get("retailer_url") or "#",
-        "is_active": row.get("is_active", True),
-        "first_seen_at": row.get("first_seen_at"),
-        "last_seen_at": row.get("last_seen_at") or row.get("first_seen_at"),
-    }
-
-
-def normalize_costco_photo(row):
-    """Normalize a row from costco_user_photos (CocoWest / WarehouseRunner)."""
-    is_usa = row.get("source") == "warehouse_runner"
-    name = row.get("name") or ""
-    sku = row.get("sku") or name
-    return {
-        "id": f"costco_photo_{row['id']}",
-        "title": name,
-        "brand": None,
-        "store": "Costco",
-        "source": row.get("source") or "cocowest",
-        "image_url": row.get("processed_url") or row.get("original_url"),
-        "current_price": row.get("price"),
-        "original_price": row.get("original_price"),
-        "discount_percent": row.get("discount_percent"),
-        "category": None,
-        "region": row.get("region") or ("USA" if is_usa else "Canada"),
-        "affiliate_url": (
-            f"https://www.costco.com/CatalogSearch?keyword={sku}"
-            if is_usa else
-            f"https://www.costco.ca/CatalogSearch?keyword={sku}"
-        ),
-        "is_active": True,
-        "first_seen_at": row.get("scraped_at") or row.get("created_at"),
-        "last_seen_at": row.get("updated_at") or row.get("scraped_at"),
-    }
-
-
-def normalize_cocoprice(row, sku_image_map=None):
-    """Normalize a CocoPriceTracker row (from retailer_products with extra_data.source)."""
-    extra = row.get("extra_data") or {}
-    region_key = extra.get("region", "west")
-    region_display = "Costco West" if region_key == "west" else "Costco East" if region_key == "east" else "Canada"
-
-    # Try to find image from costco_user_photos by SKU
-    sku = row.get("retailer_sku") or ""
-    image_url = (sku_image_map or {}).get(sku)
-
-    cur = row.get("current_price")
-    orig = row.get("original_price")
-    return {
-        "id": f"cocoprice_{row['id']}",
-        "title": row.get("title") or "",
-        "brand": row.get("brand"),
-        "store": "Costco",
-        "source": "cocopricetracker",
-        "image_url": image_url,
-        "current_price": cur,
-        "original_price": orig,
-        "discount_percent": _calc_discount(cur, orig, row.get("sale_percentage") or row.get("discount_percent")),
-        "category": row.get("retailer_category"),
-        "region": region_display,
-        "affiliate_url": row.get("retailer_url") or f"https://www.costco.ca/CatalogSearch?keyword={sku or row.get('title', '')}",
         "is_active": row.get("is_active", True),
         "first_seen_at": row.get("first_seen_at"),
         "last_seen_at": row.get("last_seen_at") or row.get("first_seen_at"),
@@ -342,27 +151,16 @@ def normalize_cocoprice(row, sku_image_map=None):
 
 # ══════════════════════════════════════════════
 # FRONTEND STATIC FILE SERVING
-# Serve index.html, CSS, and JS files from the frontend/ directory.
-# Only registered for local dev — on Vercel, static files are served from public/ by the CDN.
+# Only registered for local dev -- on Vercel, static files are served from public/
 # ══════════════════════════════════════════════
 
 if not os.getenv("VERCEL"):
     @app.route("/")
     def serve_index():
-        """Serve the main frontend page."""
         return send_from_directory(FRONTEND_DIR, "index.html")
-
-    @app.route("/css/<path:filename>")
-    def serve_css(filename):
-        return send_from_directory(os.path.join(FRONTEND_DIR, "css"), filename)
-
-    @app.route("/js/<path:filename>")
-    def serve_js(filename):
-        return send_from_directory(os.path.join(FRONTEND_DIR, "js"), filename)
 
     @app.route("/images/<path:filename>")
     def serve_images(filename):
-        """Serve image assets from frontend/images/."""
         return send_from_directory(os.path.join(FRONTEND_DIR, "images"), filename)
 
 
@@ -374,15 +172,14 @@ if not os.getenv("VERCEL"):
 @app.route("/api/health")
 @timed("GET /api/health")
 def health():
-    """Health check — verifies Supabase connection is alive."""
+    """Health check -- verifies Supabase connection is alive."""
     try:
         sb = get_supabase()
-        # Quick query to test connection
-        result = sb.table("deals").select("id", count="exact").limit(1).execute()
+        result = sb.table("retailer_products").select("id", count="exact").eq("is_active", True).limit(1).execute()
         return jsonify({
             "status": "ok",
             "database": "connected",
-            "deals_count": result.count,
+            "active_products": result.count,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
     except Exception as e:
@@ -395,9 +192,8 @@ def health():
 @timed("GET /api/filters")
 def get_filters():
     """
-    Dynamic filter options with counts.
-    Returns sources (by category), stores, regions, brands, categories,
-    and price/discount/date ranges.
+    Store list with product counts from retailer_products.
+    Counts each store by affiliate_url hostname pattern.
     Cached for 5 minutes.
     """
     cached = cache.get("filters")
@@ -406,200 +202,61 @@ def get_filters():
 
     sb = get_supabase()
 
-    # ── Count each source table ──
-    counts = {}
-
-    # Deal tables
-    for table in DEAL_TABLES:
-        try:
-            result = sb.table(table["name"]).select("id", count="exact").limit(0).execute()
-            counts[table["name"]] = result.count or 0
-        except Exception as e:
-            log_warning(f"Count failed for {table['name']}: {e}")
-            counts[table["name"]] = 0
-
-    # Retailer products (excluding CocoPriceTracker) — count per store by affiliate_url hostname
-    # All unified scrapers now write to retailer_products instead of per-store deal tables.
-    _RETAILER_URL_PATTERNS = {
-        "retailer_amazon":          "%amazon%",
-        "retailer_leons":           "%leons.ca%",
-        "retailer_the_brick":       "%thebrick.com%",
-        "retailer_frank_and_oak":   "%frankandoak.com%",
-        "retailer_reebok_ca":       "%reebok.ca%",
-        "retailer_mastermind_toys": "%mastermindtoys.com%",
-    }
-    try:
-        # Total retailer (non-cocoprice)
-        result = sb.table("retailer_products").select("id", count="exact").not_contains("extra_data", {"source": "cocopricetracker.ca"}).limit(0).execute()
-        counts["retailer_products"] = result.count or 0
-
-        # Count each store by affiliate_url
-        recognized_total = 0
-        for count_key, url_pattern in _RETAILER_URL_PATTERNS.items():
-            try:
-                result = sb.table("retailer_products").select("id", count="exact").not_contains("extra_data", {"source": "cocopricetracker.ca"}).ilike("affiliate_url", url_pattern).limit(0).execute()
-                counts[count_key] = result.count or 0
-                recognized_total += counts[count_key]
-            except Exception:
-                counts[count_key] = 0
-
-        # Flipp = everything else in retailer_products (unrecognized stores)
-        counts["retailer_flipp"] = max(0, counts["retailer_products"] - recognized_total)
-    except Exception as e:
-        log_warning(f"Count failed for retailer_products: {e}")
-        counts["retailer_products"] = 0
-        for count_key in _RETAILER_URL_PATTERNS:
-            counts[count_key] = 0
-        counts["retailer_flipp"] = 0
-
-    # Costco user photos — by source
-    for costco_source in ["cocowest", "warehouse_runner"]:
-        try:
-            result = sb.table("costco_user_photos").select("id", count="exact").eq("source", costco_source).limit(0).execute()
-            counts[costco_source] = result.count or 0
-        except Exception as e:
-            log_warning(f"Count failed for costco_user_photos/{costco_source}: {e}")
-            counts[costco_source] = 0
-
-    # CocoPriceTracker
-    try:
-        result = sb.table("retailer_products").select("id", count="exact").contains("extra_data", {"source": "cocopricetracker.ca"}).limit(0).execute()
-        counts["cocopricetracker"] = result.count or 0
-    except Exception as e:
-        log_warning(f"Count failed for cocopricetracker: {e}")
-        counts["cocopricetracker"] = 0
-
-    # ── Build sources by category ──
-    # Four groups that make sense: aggregators, amazon, store scrapers, costco
-    sources_by_category = {
-        "dealAggregators": [],
-        "amazon": [],
-        "storeScrapers": [],
-        "costcoTrackers": [],
+    # Count per store by affiliate_url hostname pattern
+    _STORE_URL_PATTERNS = {
+        "amazon_ca":       ("Amazon",          "%amazon%"),
+        "leons":           ("Leon's",          "%leons.ca%"),
+        "the_brick":       ("The Brick",       "%thebrick.com%"),
+        "frank_and_oak":   ("Frank & Oak",     "%frankandoak.com%"),
+        "reebok_ca":       ("Reebok",          "%reebok.ca%"),
+        "mastermind_toys": ("Mastermind Toys",  "%mastermindtoys.com%"),
+        "cabelas_ca":      ("Cabela's",        "%cabelas.ca%"),
     }
 
-    # Deal Aggregators — sites/feeds that collect deals from many stores
-    if counts.get("deals", 0) > 0:
-        sources_by_category["dealAggregators"].append({"value": "rfd", "label": "RedFlagDeals", "count": counts["deals"]})
-    if counts.get("yepsavings_deals", 0) > 0:
-        sources_by_category["dealAggregators"].append({"value": "yepsavings", "label": "YepSavings", "count": counts["yepsavings_deals"]})
-    if counts.get("retailer_flipp", 0) > 0:
-        sources_by_category["dealAggregators"].append({"value": "flipp", "label": "Flipp Flyers", "count": counts["retailer_flipp"]})
-
-    # Amazon — unified source from retailer_products (scraper writes to unified table since ~Jan 30)
-    if counts.get("retailer_amazon", 0) > 0:
-        sources_by_category["amazon"].append({"value": "amazon_ca", "label": "Amazon.ca Deals", "count": counts["retailer_amazon"]})
-
-    # Store Scrapers — counts from retailer_products (unified mode)
-    store_scraper_sources = [
-        ("retailer_leons",           "leons",            "Leon's"),
-        ("retailer_the_brick",       "the_brick",        "The Brick"),
-        ("retailer_frank_and_oak",   "frank_and_oak",    "Frank & Oak"),
-        ("retailer_reebok_ca",       "reebok_ca",        "Reebok Canada"),
-        ("retailer_mastermind_toys", "mastermind_toys",   "Mastermind Toys"),
-    ]
-    for count_key, value, label in store_scraper_sources:
-        c = counts.get(count_key, 0)
-        if c > 0:
-            sources_by_category["storeScrapers"].append({"value": value, "label": label, "count": c})
-
-    # Costco Trackers
-    if counts.get("cocowest", 0) > 0:
-        sources_by_category["costcoTrackers"].append({"value": "cocowest", "label": "CocoWest (Canada)", "count": counts.get("cocowest", 0)})
-    if counts.get("warehouse_runner", 0) > 0:
-        sources_by_category["costcoTrackers"].append({"value": "warehouse_runner", "label": "WarehouseRunner (USA)", "count": counts.get("warehouse_runner", 0)})
-    if counts.get("cocopricetracker", 0) > 0:
-        sources_by_category["costcoTrackers"].append({"value": "cocopricetracker", "label": "CocoPriceTracker", "count": counts.get("cocopricetracker", 0)})
-
-    # Flat sources list with counts in label
-    all_sources = []
-    for cat in ["dealAggregators", "amazon", "storeScrapers", "costcoTrackers"]:
-        for s in sources_by_category[cat]:
-            all_sources.append({"value": s["value"], "label": f"{s['label']} ({s['count']:,})", "count": s["count"]})
-
-    # ── Stores from deals table ──
     stores = []
-    try:
-        result = sb.table("deals").select("store").limit(1000).execute()
-        store_set = sorted(set(r["store"] for r in (result.data or []) if r.get("store")))
-        stores = [{"value": s, "label": s} for s in store_set]
-    except Exception as e:
-        log_warning(f"Failed to fetch stores: {e}")
+    total_active = 0
+    recognized_total = 0
 
-    # ── Regions from costco_user_photos ──
-    regions = []
+    # Get total active count first
     try:
-        result = sb.table("costco_user_photos").select("region").limit(100).execute()
-        region_set = set()
-        for r in (result.data or []):
-            if r.get("region"):
-                for part in r["region"].split("/"):
-                    region_set.add(part.strip())
-        regions = [{"value": r, "label": r} for r in sorted(region_set)]
+        result = sb.table("retailer_products").select("id", count="exact").eq("is_active", True).limit(0).execute()
+        total_active = result.count or 0
     except Exception as e:
-        log_warning(f"Failed to fetch regions: {e}")
+        log_warning(f"Total count failed: {e}")
 
-    # ── Brands (from retailer_products — top 50 by frequency) ──
-    brands = []
+    # Count each store
+    for source_key, (label, url_pattern) in _STORE_URL_PATTERNS.items():
+        try:
+            result = sb.table("retailer_products").select("id", count="exact").eq("is_active", True).ilike("affiliate_url", url_pattern).limit(0).execute()
+            count = result.count or 0
+            if count > 0:
+                stores.append({"value": source_key, "label": label, "count": count})
+                recognized_total += count
+        except Exception as e:
+            log_warning(f"Count failed for {source_key}: {e}")
+
+    # "Other" = unrecognized stores (Flipp flyer data, etc.)
+    other_count = max(0, total_active - recognized_total)
+    if other_count > 0:
+        stores.append({"value": "flipp", "label": "Other", "count": other_count})
+
+    # Find most recent last_seen_at to show "scraped X ago"
+    last_scraped = None
     try:
-        result = sb.table("retailer_products").select("brand").not_is("brand", "null").limit(2000).execute()
-        brand_counts = {}
-        for r in (result.data or []):
-            b = r.get("brand")
-            if b:
-                brand_counts[b] = brand_counts.get(b, 0) + 1
-        # Sort by count descending, take top 50
-        top_brands = sorted(brand_counts.items(), key=lambda x: -x[1])[:50]
-        brands = [{"value": b, "label": f"{b} ({c})", "count": c} for b, c in top_brands]
-    except Exception as e:
-        log_warning(f"Failed to fetch brands: {e}")
-
-    # ── Categories (from retailer_products — top 30) ──
-    categories = []
-    try:
-        result = sb.table("retailer_products").select("retailer_category").not_is("retailer_category", "null").limit(2000).execute()
-        cat_counts = {}
-        for r in (result.data or []):
-            c = r.get("retailer_category")
-            if c:
-                cat_counts[c] = cat_counts.get(c, 0) + 1
-        top_cats = sorted(cat_counts.items(), key=lambda x: -x[1])[:30]
-        categories = [{"value": c, "label": f"{c} ({ct})", "count": ct} for c, ct in top_cats]
-    except Exception as e:
-        log_warning(f"Failed to fetch categories: {e}")
-
-    # ── Grand total ──
-    costco_total = counts.get("cocowest", 0) + counts.get("warehouse_runner", 0) + counts.get("cocopricetracker", 0)
-    grand_total = sum(counts.get(t["name"], 0) for t in DEAL_TABLES) + counts.get("retailer_products", 0) + costco_total
+        result = sb.table("retailer_products").select("last_seen_at").eq("is_active", True).order("last_seen_at", desc=True).limit(1).execute()
+        if result.data:
+            last_scraped = result.data[0].get("last_seen_at")
+    except Exception:
+        pass
 
     response_data = {
-        "sources": all_sources,
-        "sourcesByCategory": {
-            cat: [{"value": s["value"], "label": f"{s['label']} ({s['count']:,})", "count": s["count"]} for s in items]
-            for cat, items in sources_by_category.items()
-        },
         "stores": stores,
-        "regions": regions,
-        "brands": brands,
-        "categories": categories,
-        "counts": {
-            "sources": len(all_sources),
-            "stores": len(stores),
-            "regions": len(regions),
-            "brands": len(brands),
-            "categories": len(categories),
-            "totalProducts": grand_total,
-            "byCategory": {
-                "dealAggregators": sum(s["count"] for s in sources_by_category["dealAggregators"]),
-                "amazon": sum(s["count"] for s in sources_by_category["amazon"]),
-                "storeScrapers": sum(s["count"] for s in sources_by_category["storeScrapers"]),
-                "costcoTrackers": costco_total,
-            },
-        },
+        "total_active": total_active,
+        "last_scraped": last_scraped,
     }
 
-    cache.set("filters", response_data, ttl_seconds=300)  # 5 min cache
-    log_success(f"Filters loaded: {len(all_sources)} sources, {len(stores)} stores, {len(brands)} brands, {grand_total:,} total products")
+    cache.set("filters", response_data, ttl_seconds=300)
+    log_success(f"Filters: {len(stores)} stores, {total_active:,} active products")
     return jsonify(response_data)
 
 
@@ -607,81 +264,35 @@ def get_filters():
 @app.route("/api/stats")
 @timed("GET /api/stats")
 def get_stats():
-    """
-    Dashboard summary stats: total products, store count, today's adds, on-sale count.
-    Cached for 60 seconds.
-    """
+    """Active product count from retailer_products. Cached for 60 seconds."""
     cached = cache.get("stats")
     if cached:
         return jsonify(cached)
 
     sb = get_supabase()
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-
     total = 0
-    today_count = 0
-    store_set = set()
-
-    # Count across deal tables
-    for table in DEAL_TABLES:
-        date_col = table.get("date_col", "created_at")
-        store_col = table.get("store_col", "store")
-        try:
-            # Total count
-            result = sb.table(table["name"]).select("id", count="exact").limit(0).execute()
-            total += result.count or 0
-
-            # Today's count
-            result_today = sb.table(table["name"]).select("id", count="exact").gte(date_col, today_start).limit(0).execute()
-            today_count += result_today.count or 0
-
-            # Stores
-            store_result = sb.table(table["name"]).select(store_col).limit(500).execute()
-            for r in (store_result.data or []):
-                val = r.get(store_col)
-                if val:
-                    store_set.add(val)
-        except Exception as e:
-            log_warning(f"Stats error for {table['name']}: {e}")
-
-    # Retailer products
-    try:
-        result = sb.table("retailer_products").select("id", count="exact").limit(0).execute()
-        total += result.count or 0
-    except Exception:
-        pass
-
-    # Costco photos
-    try:
-        result = sb.table("costco_user_photos").select("id", count="exact").limit(0).execute()
-        total += result.count or 0
-        store_set.add("Costco")
-    except Exception:
-        pass
-
-    # On-sale count (products where discount > 0 across main tables)
     on_sale = 0
+
     try:
-        result = sb.table("deals").select("id", count="exact").gt("discount_percent", 0).limit(0).execute()
-        on_sale += result.count or 0
-    except Exception:
-        pass
+        result = sb.table("retailer_products").select("id", count="exact").eq("is_active", True).limit(0).execute()
+        total = result.count or 0
+    except Exception as e:
+        log_warning(f"Stats total count failed: {e}")
+
     try:
-        result = sb.table("retailer_products").select("id", count="exact").gt("sale_percentage", 0).limit(0).execute()
-        on_sale += result.count or 0
-    except Exception:
-        pass
+        result = sb.table("retailer_products").select("id", count="exact").eq("is_active", True).gt("sale_percentage", 0).limit(0).execute()
+        on_sale = result.count or 0
+    except Exception as e:
+        log_warning(f"Stats on_sale count failed: {e}")
 
     response_data = {
-        "total_products": total,
-        "total_stores": len(store_set),
-        "added_today": today_count,
+        "total_active": total,
         "on_sale": on_sale,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
     cache.set("stats", response_data, ttl_seconds=60)
-    log_success(f"Stats: {total:,} products, {len(store_set)} stores, {today_count} today, {on_sale:,} on sale")
+    log_success(f"Stats: {total:,} active, {on_sale:,} on sale")
     return jsonify(response_data)
 
 
@@ -690,47 +301,20 @@ def get_stats():
 @timed("GET /api/products")
 def get_products():
     """
-    Multi-table paginated product query with ALL filters.
-    Fetches up to 500 rows per table, normalizes, sorts in Python, paginates.
-
-    Query params:
-      sources, stores, regions, brands, categories — comma-separated lists
-      search — text search (ILIKE on title)
-      min_discount, max_discount — discount percent range
-      min_price, max_price — price range
-      date_from, date_to — ISO date strings for date range
-      days — shortcut for date_from (e.g. days=7 → last 7 days)
-      on_sale_only — "true" to only show items with discount > 0
-      has_price_drop — "true" to only show current_price < original_price
-      active_only — "true" to only show is_active=true
-      sort_by — "last_seen_at" (default), "discount_percent", "current_price", "first_seen_at"
-      sort_order — "desc" (default) or "asc"
-      page — page number (default 1)
-      per_page — items per page (default 24)
+    Paginated product query from retailer_products (is_active=true).
+    Filters: sources, search, min_discount, min_price, max_price, days, sort_by, sort_order, page, per_page.
     """
     sb = get_supabase()
     start_time = time.time()
 
-    # ── Parse all filter params ──
+    # ── Parse filter params ──
     sources = [s for s in request.args.get("sources", "").split(",") if s]
-    stores_filter = [s for s in request.args.get("stores", "").split(",") if s]
-    regions_filter = [s for s in request.args.get("regions", "").split(",") if s]
-    brands_filter = [s for s in request.args.get("brands", "").split(",") if s]
-    categories_filter = [s for s in request.args.get("categories", "").split(",") if s]
     search = request.args.get("search", "").strip()
-
     min_discount = _parse_int(request.args.get("min_discount"))
-    max_discount = _parse_int(request.args.get("max_discount"))
     min_price = _parse_float(request.args.get("min_price"))
     max_price = _parse_float(request.args.get("max_price"))
-
-    date_from = request.args.get("date_from")
-    date_to = request.args.get("date_to")
     days = _parse_int(request.args.get("days"))
-
-    on_sale_only = request.args.get("on_sale_only", "").lower() == "true"
-    has_price_drop = request.args.get("has_price_drop", "").lower() == "true"
-    active_only = request.args.get("active_only", "").lower() == "true"
+    date_from = request.args.get("date_from")
 
     sort_by = request.args.get("sort_by", "last_seen_at")
     sort_order = request.args.get("sort_order", "desc")
@@ -743,210 +327,58 @@ def get_products():
     if days and not date_from:
         date_from = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
 
-    # Fetch limit per table — when post-filters (discount, on_sale, price_drop) are active,
-    # we need more rows because the DB can't filter these (discount is computed from prices).
-    # Without post-filters, a smaller fetch is fine for pagination.
-    has_post_filters = (min_discount is not None or max_discount is not None
-                        or on_sale_only or has_price_drop)
+    # Discount filtering is done post-fetch because discount_percent is computed
+    # from prices during normalization (many rows have NULL sale_percentage).
+    has_post_filters = min_discount is not None
     fetch_limit = 500 if has_post_filters else min(page * per_page + per_page, 500)
 
-    log_debug(f"Filters: sources={sources}, search='{search}', discount={min_discount}-{max_discount}, "
-              f"price={min_price}-{max_price}, dates={date_from} to {date_to}, "
-              f"on_sale={on_sale_only}, drop={has_price_drop}, sort={sort_by}/{sort_order}, page={page}")
+    log_debug(f"Filters: sources={sources}, search='{search}', min_discount={min_discount}, "
+              f"price={min_price}-{max_price}, days={days}, sort={sort_by}/{sort_order}, page={page}")
 
-    all_products = []
+    # ── Build query ──
+    try:
+        query = sb.table("retailer_products").select("*").eq("is_active", True)
 
-    # ── Query deal tables ──
-    for table in DEAL_TABLES:
-        # Skip if source filter excludes this table
-        if sources:
-            if table["source"] and table["source"] not in sources:
-                continue
-            # The main deals table IS RedFlagDeals — only include when "rfd" is selected.
-            # Don't include it for "amazon"/"flipp"/etc, those have their own dedicated tables.
-            if table["name"] == "deals":
-                if "rfd" not in [s.lower() for s in sources]:
-                    continue
+        if search:
+            query = query.ilike("title", f"%{search}%")
+        if max_price is not None:
+            query = query.lte("current_price", max_price)
+        if min_price is not None:
+            query = query.gte("current_price", min_price)
+        if date_from:
+            query = query.gte("first_seen_at", date_from)
 
-        try:
-            date_col = table.get("date_col", "created_at")
-            store_col = table.get("store_col", "store")
+        # DB-level sort
+        order_col = "first_seen_at" if sort_by == "first_seen_at" else "last_seen_at"
+        if sort_by == "current_price":
+            order_col = "current_price"
+        elif sort_by == "discount_percent":
+            order_col = "sale_percentage"
+        query = query.order(order_col, desc=not ascending)
 
-            query = sb.table(table["name"]).select("*")
-            if search:
-                query = query.ilike("title", f"%{search}%")
-            if stores_filter:
-                query = query.in_(store_col, stores_filter)
-            # NOTE: discount filtering moved to post-processing — many tables have
-            # NULL discount_percent even when prices show a real discount.
-            if max_price is not None:
-                query = query.lte("current_price", max_price)
-            if min_price is not None:
-                query = query.gte("current_price", min_price)
-            if date_from:
-                query = query.gte(date_col, date_from)
-            if date_to:
-                query = query.lte(date_col, date_to)
+        result = query.limit(fetch_limit).execute()
+        rows = result.data or []
+        log_debug(f"  retailer_products: {len(rows)} rows fetched")
 
-            result = query.order(date_col, desc=not ascending).limit(fetch_limit).execute()
+    except Exception as e:
+        log_error(f"Query failed: {e}")
+        return jsonify({"error": str(e)}), 500
 
-            for row in (result.data or []):
-                all_products.append(normalize_deal(row, table["name"], table["source"]))
+    # ── Normalize all rows ──
+    all_products = [normalize_retailer(row) for row in rows]
 
-            log_debug(f"  {table['name']}: {len(result.data or [])} rows")
-        except Exception as e:
-            log_warning(f"Query failed for {table['name']}: {e}")
+    # ── Post-fetch: filter by source ──
+    if sources:
+        source_set = {s.lower() for s in sources}
+        all_products = [p for p in all_products if p["source"] in source_set]
 
-    # ── Query retailer_products (excluding CocoPriceTracker) ──
-    # Include if no source filter, or if any retailer-relevant source is selected
-    include_retailer = not sources or any(s.lower() in (
-        "amazon_ca", "amazon", "leons", "the_brick", "frank_and_oak",
-        "reebok_ca", "mastermind_toys", "retailer", "flipp"
-    ) for s in sources)
-    if include_retailer:
-        try:
-            query = sb.table("retailer_products").select("*").not_contains("extra_data", {"source": "cocopricetracker.ca"})
-            if search:
-                query = query.ilike("title", f"%{search}%")
-            if regions_filter:
-                query = query.in_("region", regions_filter)
-            if brands_filter:
-                query = query.in_("brand", brands_filter)
-            if categories_filter:
-                query = query.in_("retailer_category", categories_filter)
-            # NOTE: discount/on_sale filtering moved to post-processing
-            if max_price is not None:
-                query = query.lte("current_price", max_price)
-            if min_price is not None:
-                query = query.gte("current_price", min_price)
-            if date_from:
-                query = query.gte("first_seen_at", date_from)
-            if date_to:
-                query = query.lte("first_seen_at", date_to)
-
-            result = query.order("first_seen_at", desc=not ascending).limit(fetch_limit).execute()
-
-            # Normalize all retailer rows
-            retailer_normalized = [normalize_retailer(row) for row in (result.data or [])]
-
-            # POST-FILTER by source — this is the critical fix!
-            # Without this, selecting "amazon" pulls in ALL Flipp products too.
-            if sources:
-                source_lower = {s.lower() for s in sources}
-                retailer_normalized = [
-                    p for p in retailer_normalized
-                    if p.get("source", "").lower() in source_lower
-                ]
-
-            all_products.extend(retailer_normalized)
-            log_debug(f"  retailer_products: {len(result.data or [])} fetched, {len(retailer_normalized)} after source filter")
-        except Exception as e:
-            log_warning(f"Query failed for retailer_products: {e}")
-
-    # ── Query costco_user_photos ──
-    include_costco = not sources or any(s.lower() in ("cocowest", "warehouse_runner") for s in sources)
-    if include_costco:
-        try:
-            query = sb.table("costco_user_photos").select("*")
-
-            # Filter by specific costco source if requested
-            costco_sources = [s for s in sources if s.lower() in ("cocowest", "warehouse_runner")]
-            if costco_sources:
-                query = query.in_("source", costco_sources)
-
-            if search:
-                query = query.ilike("name", f"%{search}%")
-            if regions_filter:
-                query = query.ilike("region", f"%{regions_filter[0]}%")
-            # NOTE: discount/on_sale filtering moved to post-processing
-            if max_price is not None:
-                query = query.lte("price", max_price)
-            if min_price is not None:
-                query = query.gte("price", min_price)
-            if date_from:
-                query = query.gte("scraped_at", date_from)
-            if date_to:
-                query = query.lte("scraped_at", date_to)
-
-            result = query.order("scraped_at", desc=not ascending).limit(fetch_limit).execute()
-
-            for row in (result.data or []):
-                all_products.append(normalize_costco_photo(row))
-
-            log_debug(f"  costco_user_photos: {len(result.data or [])} rows")
-        except Exception as e:
-            log_warning(f"Query failed for costco_user_photos: {e}")
-
-    # ── Query CocoPriceTracker (retailer_products with extra_data.source) ──
-    include_cocoprice = not sources or "cocopricetracker" in [s.lower() for s in sources]
-    if include_cocoprice:
-        try:
-            query = sb.table("retailer_products").select("*").contains("extra_data", {"source": "cocopricetracker.ca"})
-            if search:
-                query = query.ilike("title", f"%{search}%")
-            # NOTE: discount/on_sale filtering moved to post-processing
-            if max_price is not None:
-                query = query.lte("current_price", max_price)
-            if min_price is not None:
-                query = query.gte("current_price", min_price)
-            if date_from:
-                query = query.gte("first_seen_at", date_from)
-            if date_to:
-                query = query.lte("first_seen_at", date_to)
-
-            result = query.order("updated_at", desc=not ascending).limit(fetch_limit).execute()
-
-            # Build SKU → image map from costco_user_photos
-            cocoprice_data = result.data or []
-            sku_image_map = {}
-            if cocoprice_data:
-                skus = [r.get("retailer_sku") for r in cocoprice_data if r.get("retailer_sku")]
-                if skus:
-                    try:
-                        photo_result = sb.table("costco_user_photos").select("sku, original_url, processed_url").in_("sku", skus).execute()
-                        for p in (photo_result.data or []):
-                            if p.get("sku") and p["sku"] not in sku_image_map:
-                                sku_image_map[p["sku"]] = p.get("processed_url") or p.get("original_url")
-                    except Exception:
-                        pass
-
-            for row in cocoprice_data:
-                all_products.append(normalize_cocoprice(row, sku_image_map))
-
-            log_debug(f"  cocopricetracker: {len(cocoprice_data)} rows")
-        except Exception as e:
-            log_warning(f"Query failed for cocopricetracker: {e}")
-
-    # ── Post-fetch filtering ──
-    # Discount filtering is done HERE (not at DB level) because many tables
-    # have NULL discount_percent — we compute it from prices in normalization.
+    # ── Post-fetch: filter by discount ──
     if min_discount is not None:
         all_products = [p for p in all_products if (p.get("discount_percent") or 0) >= min_discount]
-    if max_discount is not None:
-        all_products = [p for p in all_products if (p.get("discount_percent") or 0) <= max_discount]
-    if on_sale_only:
-        all_products = [p for p in all_products if (p.get("discount_percent") or 0) > 0]
 
-    if has_price_drop:
-        all_products = [
-            p for p in all_products
-            if p.get("current_price") and p.get("original_price")
-            and p["current_price"] < p["original_price"]
-        ]
-
-    if active_only:
-        all_products = [p for p in all_products if p.get("is_active", True)]
-
-    # ── Sort combined results ──
+    # ── Re-sort if sorting by computed discount_percent ──
     if sort_by == "discount_percent":
         all_products.sort(key=lambda p: p.get("discount_percent") or 0, reverse=not ascending)
-    elif sort_by == "current_price":
-        all_products.sort(key=lambda p: p.get("current_price") or 0, reverse=not ascending)
-    elif sort_by == "first_seen_at":
-        all_products.sort(key=lambda p: p.get("first_seen_at") or "", reverse=not ascending)
-    else:
-        # Default: sort by last_seen_at
-        all_products.sort(key=lambda p: p.get("last_seen_at") or "", reverse=not ascending)
 
     # ── Paginate ──
     total = len(all_products)
@@ -954,40 +386,6 @@ def get_products():
     paginated = all_products[offset:offset + per_page]
 
     query_time = (time.time() - start_time) * 1000
-
-    # Build applied_filters summary for the response
-    applied = {}
-    if sources:
-        applied["sources"] = sources
-    if stores_filter:
-        applied["stores"] = stores_filter
-    if regions_filter:
-        applied["regions"] = regions_filter
-    if brands_filter:
-        applied["brands"] = brands_filter
-    if categories_filter:
-        applied["categories"] = categories_filter
-    if search:
-        applied["search"] = search
-    if min_discount is not None:
-        applied["min_discount"] = min_discount
-    if max_discount is not None:
-        applied["max_discount"] = max_discount
-    if min_price is not None:
-        applied["min_price"] = min_price
-    if max_price is not None:
-        applied["max_price"] = max_price
-    if date_from:
-        applied["date_from"] = date_from
-    if date_to:
-        applied["date_to"] = date_to
-    if on_sale_only:
-        applied["on_sale_only"] = True
-    if has_price_drop:
-        applied["has_price_drop"] = True
-    if active_only:
-        applied["active_only"] = True
-
     log_success(f"Products: {total} total, returning {len(paginated)} (page {page}), {query_time:.0f}ms")
 
     return jsonify({
@@ -995,8 +393,7 @@ def get_products():
         "total": total,
         "page": page,
         "per_page": per_page,
-        "total_pages": (total + per_page - 1) // per_page,
-        "applied_filters": applied,
+        "total_pages": max(1, (total + per_page - 1) // per_page),
         "query_time_ms": round(query_time),
     })
 
@@ -1005,92 +402,38 @@ def get_products():
 @app.route("/api/product/<product_id>")
 @timed("GET /api/product/<id>")
 def get_product(product_id):
-    """
-    Single product detail with price history.
-    ID prefix routing: retailer_, costco_photo_, cocoprice_, {deal_table}_.
-    """
+    """Single product detail with price history from retailer_products."""
     sb = get_supabase()
 
-    if product_id.startswith("costco_photo_"):
-        return _get_costco_photo_detail(sb, product_id.replace("costco_photo_", ""))
-    elif product_id.startswith("cocoprice_"):
-        return _get_cocoprice_detail(sb, product_id.replace("cocoprice_", ""))
-    elif product_id.startswith("retailer_"):
-        return _get_retailer_detail(sb, product_id.replace("retailer_", ""))
-    else:
-        # Check deal tables by prefix
-        for table in DEAL_TABLES:
-            prefix = f"{table['name']}_"
-            if product_id.startswith(prefix):
-                actual_id = product_id[len(prefix):]
-                return _get_deal_detail(sb, table["name"], actual_id)
-        # Fallback: assume it's from the main deals table
-        actual_id = product_id.replace("deal_", "")
-        return _get_deal_detail(sb, "deals", actual_id)
+    # Strip retailer_ prefix if present
+    actual_id = product_id.replace("retailer_", "")
 
+    try:
+        result = sb.table("retailer_products").select("*").eq("id", actual_id).limit(1).execute()
+    except Exception as e:
+        log_error(f"Product lookup failed: {e}")
+        return jsonify({"error": str(e)}), 500
 
-def _build_price_history(data, price_key="current_price", first_seen_key="first_seen_at", last_seen_key="last_seen_at", discount_key="discount_percent"):
-    """Build a synthetic price history from a single product row (when no history table data exists)."""
-    current = data.get(price_key) or data.get("price")
-    original = data.get("original_price")
-    first_seen = data.get(first_seen_key) or data.get("created_at") or datetime.now(timezone.utc).isoformat()
+    if not result.data:
+        return jsonify({"error": "Product not found"}), 404
 
-    if original and current and original > current:
-        return [
-            {"price": original, "original_price": original, "scraped_at": first_seen, "is_on_sale": False},
-            {"price": current, "original_price": original,
-             "scraped_at": data.get(last_seen_key) or data.get("updated_at") or datetime.now(timezone.utc).isoformat(),
-             "is_on_sale": True},
+    data = result.data[0]
+
+    # Get price history
+    history = []
+    try:
+        h_result = sb.table("price_history").select(
+            "price, original_price, scraped_at, is_on_sale"
+        ).eq("retailer_product_id", actual_id).order("scraped_at").execute()
+        history = [
+            {"price": h["price"], "original_price": h.get("original_price"),
+             "scraped_at": h["scraped_at"], "is_on_sale": h.get("is_on_sale", False)}
+            for h in (h_result.data or [])
         ]
-    else:
-        return [{
-            "price": current,
-            "original_price": original,
-            "scraped_at": first_seen,
-            "is_on_sale": bool(data.get(discount_key) or 0),
-        }]
-
-
-def _get_deal_detail(sb, table_name, actual_id):
-    """Fetch detail for a deal table product."""
-    result = sb.table(table_name).select("*").eq("id", actual_id).limit(1).execute()
-    if not result.data:
-        return jsonify({"error": "Product not found"}), 404
-    data = result.data[0]
-
-    # Get price history from deal_price_history
-    history = []
-    try:
-        h_result = sb.table("deal_price_history").select("price, original_price, scraped_at, is_on_sale").eq("deal_id", actual_id).order("scraped_at").execute()
-        history = [{"price": h["price"], "original_price": h.get("original_price"), "scraped_at": h["scraped_at"], "is_on_sale": h.get("is_on_sale", False)} for h in (h_result.data or [])]
     except Exception:
         pass
 
-    if not history:
-        history = _build_price_history(data, price_key="current_price", first_seen_key="date_added", last_seen_key="date_updated")
-
-    source_val = data.get("source") or (table_name.replace("_deals", "") if table_name != "deals" else "deals")
-    product = normalize_deal(data, table_name, source_val)
-    product["price_history"] = history
-    product["description"] = data.get("description")
-    return jsonify(product)
-
-
-def _get_retailer_detail(sb, actual_id):
-    """Fetch detail for a retailer_products product."""
-    result = sb.table("retailer_products").select("*").eq("id", actual_id).limit(1).execute()
-    if not result.data:
-        return jsonify({"error": "Product not found"}), 404
-    data = result.data[0]
-
-    # Get price history from price_history table
-    history = []
-    try:
-        h_result = sb.table("price_history").select("price, original_price, scraped_at, is_on_sale").eq("retailer_product_id", actual_id).order("scraped_at").execute()
-        history = [{"price": h["price"], "original_price": h.get("original_price"), "scraped_at": h["scraped_at"], "is_on_sale": h.get("is_on_sale", False)} for h in (h_result.data or [])]
-    except Exception:
-        pass
-
+    # If no history rows, synthesize from current product data
     if not history:
         history = _build_price_history(data)
 
@@ -1100,89 +443,59 @@ def _get_retailer_detail(sb, actual_id):
     return jsonify(product)
 
 
-def _get_costco_photo_detail(sb, actual_id):
-    """Fetch detail for a costco_user_photos product."""
-    result = sb.table("costco_user_photos").select("*").eq("id", actual_id).limit(1).execute()
-    if not result.data:
-        return jsonify({"error": "Product not found"}), 404
-    data = result.data[0]
-
-    # Costco photos don't have a dedicated history table — synthesize from price data
-    history = _build_price_history(data, price_key="price", first_seen_key="scraped_at", last_seen_key="updated_at")
-
-    product = normalize_costco_photo(data)
-    product["price_history"] = history
-    product["description"] = f"SKU: {data['sku']}" if data.get("sku") else None
-    return jsonify(product)
-
-
-def _get_cocoprice_detail(sb, actual_id):
-    """Fetch detail for a CocoPriceTracker product (in retailer_products)."""
-    result = sb.table("retailer_products").select("*").eq("id", actual_id).limit(1).execute()
-    if not result.data:
-        return jsonify({"error": "Product not found"}), 404
-    data = result.data[0]
-
-    # Get price history from price_history table
-    history = []
-    try:
-        h_result = sb.table("price_history").select("price, original_price, scraped_at, is_on_sale").eq("retailer_product_id", actual_id).order("scraped_at").execute()
-        history = [{"price": h["price"], "original_price": h.get("original_price"), "scraped_at": h["scraped_at"], "is_on_sale": h.get("is_on_sale", False)} for h in (h_result.data or [])]
-    except Exception:
-        pass
-
-    if not history:
-        history = _build_price_history(data)
-
-    product = normalize_cocoprice(data)
-    product["price_history"] = history
-    product["description"] = f"SKU: {data.get('retailer_sku')}" if data.get("retailer_sku") else None
-    return jsonify(product)
-
-
 # ── GET /api/product/<id>/history ────────────
 @app.route("/api/product/<product_id>/history")
 @timed("GET /api/product/<id>/history")
 def get_product_history(product_id):
-    """
-    Full price history for a product with computed stats.
-    Returns all price_history or deal_price_history rows + lowest/highest/avg/total points/change%.
-    """
+    """Full price history for a product with computed stats."""
     sb = get_supabase()
+    actual_id = product_id.replace("retailer_", "")
     history = []
 
     try:
-        if product_id.startswith("cocoprice_") or product_id.startswith("retailer_"):
-            # Both use price_history table, but different key columns
-            actual_id = product_id.replace("cocoprice_", "").replace("retailer_", "")
-            # Try retailer_product_id first, then product_id
-            h_result = sb.table("price_history").select("price, original_price, scraped_at, is_on_sale").eq("retailer_product_id", actual_id).order("scraped_at").execute()
-            if not h_result.data:
-                h_result = sb.table("price_history").select("price, original_price, scraped_at, is_on_sale").eq("retailer_product_id", actual_id).order("scraped_at").execute()
-            history = h_result.data or []
-        elif product_id.startswith("costco_photo_"):
-            # No dedicated history table — return synthetic from product data
-            actual_id = product_id.replace("costco_photo_", "")
-            result = sb.table("costco_user_photos").select("*").eq("id", actual_id).limit(1).execute()
-            if result.data:
-                history = _build_price_history(result.data[0], price_key="price", first_seen_key="scraped_at", last_seen_key="updated_at")
-                return jsonify(_compute_history_stats(history))
-            return jsonify({"error": "Product not found"}), 404
-        else:
-            # Deal tables — use deal_price_history
-            actual_id = product_id
-            for table in DEAL_TABLES:
-                prefix = f"{table['name']}_"
-                if product_id.startswith(prefix):
-                    actual_id = product_id[len(prefix):]
-                    break
-            actual_id = actual_id.replace("deal_", "")
-            h_result = sb.table("deal_price_history").select("price, original_price, scraped_at, is_on_sale").eq("deal_id", actual_id).order("scraped_at").execute()
-            history = h_result.data or []
+        h_result = sb.table("price_history").select(
+            "price, original_price, scraped_at, is_on_sale"
+        ).eq("retailer_product_id", actual_id).order("scraped_at").execute()
+        history = h_result.data or []
     except Exception as e:
         log_warning(f"History lookup failed for {product_id}: {e}")
 
+    # If no history, try to synthesize from product data
+    if not history:
+        try:
+            result = sb.table("retailer_products").select("*").eq("id", actual_id).limit(1).execute()
+            if result.data:
+                history = _build_price_history(result.data[0])
+        except Exception:
+            pass
+
     return jsonify(_compute_history_stats(history))
+
+
+# ══════════════════════════════════════════════
+# HELPERS
+# ══════════════════════════════════════════════
+
+def _build_price_history(data):
+    """Build a synthetic price history from a single product row."""
+    current = data.get("current_price")
+    original = data.get("original_price")
+    first_seen = data.get("first_seen_at") or data.get("created_at") or datetime.now(timezone.utc).isoformat()
+
+    if original and current and original > current:
+        return [
+            {"price": original, "original_price": original, "scraped_at": first_seen, "is_on_sale": False},
+            {"price": current, "original_price": original,
+             "scraped_at": data.get("last_seen_at") or data.get("updated_at") or datetime.now(timezone.utc).isoformat(),
+             "is_on_sale": True},
+        ]
+    else:
+        return [{
+            "price": current,
+            "original_price": original,
+            "scraped_at": first_seen,
+            "is_on_sale": bool(data.get("sale_percentage") or 0),
+        }]
 
 
 def _compute_history_stats(history_rows):
@@ -1215,193 +528,7 @@ def _compute_history_stats(history_rows):
     }
 
 
-# ── GET /api/price-tracker ───────────────────
-@app.route("/api/price-tracker")
-@timed("GET /api/price-tracker")
-def price_tracker():
-    """
-    Price drops feed: recently_dropped, most_tracked, biggest_drops.
-    Query params: source (optional), days (default 30), limit (default 50).
-    """
-    sb = get_supabase()
-    days = _parse_int(request.args.get("days")) or 30
-    limit = min(_parse_int(request.args.get("limit")) or 50, 100)
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-
-    recently_dropped = []
-    most_tracked = []
-    biggest_drops = []
-
-    # ── Recently dropped: products where latest price < previous price ──
-    try:
-        # Get recent price history entries
-        h_result = sb.table("price_history").select("retailer_product_id, price, original_price, scraped_at, is_on_sale").gte("scraped_at", cutoff).order("scraped_at", desc=True).limit(500).execute()
-
-        # Group by product_id and find drops
-        product_prices = {}
-        for h in (h_result.data or []):
-            pid = h.get("retailer_product_id")
-            if not pid:
-                continue
-            if pid not in product_prices:
-                product_prices[pid] = []
-            product_prices[pid].append(h)
-
-        drops = []
-        for pid, entries in product_prices.items():
-            if len(entries) >= 2:
-                latest = entries[0]  # Most recent (sorted desc)
-                previous = entries[1]
-                if latest["price"] and previous["price"] and latest["price"] < previous["price"]:
-                    drop_pct = ((previous["price"] - latest["price"]) / previous["price"]) * 100
-                    drops.append({
-                        "product_id": f"retailer_{pid}",
-                        "old_price": previous["price"],
-                        "new_price": latest["price"],
-                        "drop_percent": round(drop_pct, 1),
-                        "dropped_at": latest["scraped_at"],
-                    })
-
-        # Also check deal_price_history
-        try:
-            dh_result = sb.table("deal_price_history").select("deal_id, price, original_price, scraped_at, is_on_sale").gte("scraped_at", cutoff).order("scraped_at", desc=True).limit(500).execute()
-            deal_prices = {}
-            for h in (dh_result.data or []):
-                did = h.get("deal_id")
-                if not did:
-                    continue
-                if did not in deal_prices:
-                    deal_prices[did] = []
-                deal_prices[did].append(h)
-
-            for did, entries in deal_prices.items():
-                if len(entries) >= 2:
-                    latest = entries[0]
-                    previous = entries[1]
-                    if latest["price"] and previous["price"] and latest["price"] < previous["price"]:
-                        drop_pct = ((previous["price"] - latest["price"]) / previous["price"]) * 100
-                        drops.append({
-                            "product_id": f"deals_{did}",
-                            "old_price": previous["price"],
-                            "new_price": latest["price"],
-                            "drop_percent": round(drop_pct, 1),
-                            "dropped_at": latest["scraped_at"],
-                        })
-        except Exception:
-            pass
-
-        # Sort by drop % descending and take top N
-        drops.sort(key=lambda x: x["drop_percent"], reverse=True)
-        recently_dropped = drops[:limit]
-    except Exception as e:
-        log_warning(f"Price tracker recently_dropped failed: {e}")
-
-    # ── Most tracked: products with the most data points ──
-    try:
-        # Count entries per product in price_history
-        h_result = sb.table("price_history").select("retailer_product_id").limit(2000).execute()
-        counts = {}
-        for h in (h_result.data or []):
-            pid = h.get("retailer_product_id")
-            if pid:
-                counts[pid] = counts.get(pid, 0) + 1
-
-        top_tracked = sorted(counts.items(), key=lambda x: -x[1])[:limit]
-        most_tracked = [{"product_id": f"retailer_{pid}", "data_points": count} for pid, count in top_tracked]
-    except Exception as e:
-        log_warning(f"Price tracker most_tracked failed: {e}")
-
-    # ── Biggest drops: all-time largest % drops ──
-    try:
-        # Query products where current_price < original_price with the biggest gap
-        result = sb.table("retailer_products").select("id, title, brand, current_price, original_price, sale_percentage").gt("sale_percentage", 0).order("sale_percentage", desc=True).limit(limit).execute()
-        biggest_drops = [{
-            "product_id": f"retailer_{r['id']}",
-            "title": r.get("title", ""),
-            "brand": r.get("brand"),
-            "current_price": r.get("current_price"),
-            "original_price": r.get("original_price"),
-            "drop_percent": r.get("sale_percentage", 0),
-        } for r in (result.data or [])]
-    except Exception as e:
-        log_warning(f"Price tracker biggest_drops failed: {e}")
-
-    # Enrich recently_dropped and most_tracked with product titles
-    all_pids = set()
-    for item in recently_dropped + most_tracked:
-        pid = item["product_id"]
-        if pid.startswith("retailer_"):
-            all_pids.add(pid.replace("retailer_", ""))
-
-    product_names = {}
-    if all_pids:
-        try:
-            id_list = list(all_pids)[:100]  # Cap lookups
-            result = sb.table("retailer_products").select("id, title, brand, current_price, original_price").in_("id", id_list).execute()
-            for r in (result.data or []):
-                product_names[str(r["id"])] = {
-                    "title": r.get("title", ""),
-                    "brand": r.get("brand"),
-                    "current_price": r.get("current_price"),
-                    "original_price": r.get("original_price"),
-                }
-        except Exception:
-            pass
-
-    # Merge names into results
-    for item in recently_dropped + most_tracked:
-        pid = item["product_id"].replace("retailer_", "").replace("deals_", "")
-        info = product_names.get(pid, {})
-        item["title"] = item.get("title") or info.get("title", "Unknown Product")
-        item["brand"] = item.get("brand") or info.get("brand")
-        if "current_price" not in item:
-            item["current_price"] = info.get("current_price")
-        if "original_price" not in item:
-            item["original_price"] = info.get("original_price")
-
-    return jsonify({
-        "recently_dropped": recently_dropped,
-        "most_tracked": most_tracked,
-        "biggest_drops": biggest_drops,
-        "params": {"days": days, "limit": limit},
-    })
-
-
-# ── GET /api/scrapers ────────────────────────
-@app.route("/api/scrapers")
-@timed("GET /api/scrapers")
-def get_scrapers():
-    """Proxy to the droplet API for scraper status information."""
-    try:
-        resp = requests.get(f"{DROPLET_API_URL}/health/scrapers", timeout=10)
-        return jsonify(resp.json()), resp.status_code
-    except requests.exceptions.ConnectionError:
-        log_warning(f"Cannot reach droplet API at {DROPLET_API_URL}")
-        return jsonify({"error": "Droplet API unreachable", "url": DROPLET_API_URL}), 503
-    except Exception as e:
-        log_error(f"Scraper proxy error: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-# ── POST /api/scrapers/<name>/trigger ────────
-@app.route("/api/scrapers/<name>/trigger", methods=["POST"])
-@timed("POST /api/scrapers/<name>/trigger")
-def trigger_scraper(name):
-    """Trigger a scraper run via the droplet API."""
-    try:
-        resp = requests.post(f"{DROPLET_API_URL}/scrapers/{name}/run", timeout=15)
-        return jsonify(resp.json()), resp.status_code
-    except Exception as e:
-        log_error(f"Trigger scraper error: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-# ══════════════════════════════════════════════
-# HELPERS
-# ══════════════════════════════════════════════
-
 def _parse_int(value):
-    """Safely parse an int from a string. Returns None if invalid."""
     if value is None:
         return None
     try:
@@ -1411,7 +538,6 @@ def _parse_int(value):
 
 
 def _parse_float(value):
-    """Safely parse a float from a string. Returns None if invalid."""
     if value is None:
         return None
     try:
@@ -1427,15 +553,13 @@ def _parse_float(value):
 if __name__ == "__main__":
     print()
     log_info("=" * 60)
-    log_info("  Deal Viewer API Server")
+    log_info("  Deal Viewer API Server (Simplified)")
     log_info(f"  Port: {FLASK_PORT}")
     log_info(f"  Debug: {FLASK_DEBUG}")
     log_info(f"  Frontend: {FRONTEND_DIR}")
-    log_info(f"  Droplet API: {DROPLET_API_URL}")
     log_info("=" * 60)
     print()
 
-    # Test DB connection on startup
     try:
         get_supabase()
         log_success("Database connection verified")
