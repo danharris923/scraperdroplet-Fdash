@@ -93,6 +93,18 @@ _HOST_SOURCE_MAP = {
     "cabelas":        ("Cabela's",         "cabelas_ca"),
 }
 
+# Source key -> affiliate_url ILIKE pattern (for DB-level filtering)
+# Patterns must match the DOMAIN only (not product slugs in URLs)
+_SOURCE_URL_PATTERN = {
+    "amazon_ca":       "*amazon.ca*",
+    "leons":           "*leons.ca*",
+    "the_brick":       "*thebrick.com*",
+    "frank_and_oak":   "*frankandoak.com*",
+    "reebok_ca":       "*reebok.ca*",
+    "mastermind_toys": "*mastermindtoys.com*",
+    "cabelas_ca":      "*cabelas.ca*",
+}
+
 
 def normalize_retailer(row):
     """Normalize a row from retailer_products into a unified product dict."""
@@ -204,7 +216,7 @@ def get_filters():
 
     # Count per store by affiliate_url hostname pattern
     _STORE_URL_PATTERNS = {
-        "amazon_ca":       ("Amazon",          "%amazon%"),
+        "amazon_ca":       ("Amazon",          "%amazon.ca%"),
         "leons":           ("Leon's",          "%leons.ca%"),
         "the_brick":       ("The Brick",       "%thebrick.com%"),
         "frank_and_oak":   ("Frank & Oak",     "%frankandoak.com%"),
@@ -327,16 +339,26 @@ def get_products():
     if days and not date_from:
         date_from = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
 
-    # We always fetch 500 rows because source filtering is done post-fetch
-    # (source is derived from affiliate_url hostname during normalization).
-    fetch_limit = 500
-
     log_debug(f"Filters: sources={sources}, search='{search}', min_discount={min_discount}, "
               f"price={min_price}-{max_price}, days={days}, sort={sort_by}/{sort_order}, page={page}")
 
-    # ── Build query (exclude CocoPriceTracker -- no affiliate URLs) ──
+    # ── Build query with DB-level filtering and pagination ──
     try:
-        query = sb.table("retailer_products").select("*").eq("is_active", True).not_contains("extra_data", {"source": "cocopricetracker.ca"})
+        query = sb.table("retailer_products").select("*", count="exact") \
+            .eq("is_active", True) \
+            .not_contains("extra_data", {"source": "cocopricetracker.ca"})
+
+        # DB-level source filtering via affiliate_url patterns
+        if sources:
+            url_patterns = [_SOURCE_URL_PATTERN[s] for s in sources if s in _SOURCE_URL_PATTERN]
+            if len(url_patterns) == 1:
+                # Single source -- simple ilike
+                query = query.ilike("affiliate_url", url_patterns[0])
+            elif url_patterns:
+                # Multiple sources -- OR filter
+                or_conditions = [f"affiliate_url.ilike.{p}" for p in url_patterns]
+                query = query.or_(or_conditions)
+            # If no recognized patterns (e.g. "flipp"), skip URL filter -- gets everything
 
         if search:
             query = query.ilike("title", f"%{search}%")
@@ -344,6 +366,8 @@ def get_products():
             query = query.lte("current_price", max_price)
         if min_price is not None:
             query = query.gte("current_price", min_price)
+        if min_discount is not None:
+            query = query.gte("sale_percentage", min_discount)
         if date_from:
             query = query.gte("first_seen_at", date_from)
 
@@ -355,40 +379,25 @@ def get_products():
             order_col = "sale_percentage"
         query = query.order(order_col, desc=not ascending)
 
-        result = query.limit(fetch_limit).execute()
+        # DB-level pagination
+        db_offset = (page - 1) * per_page
+        result = query.offset(db_offset).limit(per_page).execute()
         rows = result.data or []
-        log_debug(f"  retailer_products: {len(rows)} rows fetched")
+        total = result.count or len(rows)
+        log_debug(f"  retailer_products: {len(rows)} rows (total={total})")
 
     except Exception as e:
         log_error(f"Query failed: {e}")
         return jsonify({"error": str(e)}), 500
 
-    # ── Normalize all rows ──
-    all_products = [normalize_retailer(row) for row in rows]
-
-    # ── Post-fetch: filter by source ──
-    if sources:
-        source_set = {s.lower() for s in sources}
-        all_products = [p for p in all_products if p["source"] in source_set]
-
-    # ── Post-fetch: filter by discount ──
-    if min_discount is not None:
-        all_products = [p for p in all_products if (p.get("discount_percent") or 0) >= min_discount]
-
-    # ── Re-sort if sorting by computed discount_percent ──
-    if sort_by == "discount_percent":
-        all_products.sort(key=lambda p: p.get("discount_percent") or 0, reverse=not ascending)
-
-    # ── Paginate ──
-    total = len(all_products)
-    offset = (page - 1) * per_page
-    paginated = all_products[offset:offset + per_page]
+    # ── Normalize rows ──
+    products = [normalize_retailer(row) for row in rows]
 
     query_time = (time.time() - start_time) * 1000
-    log_success(f"Products: {total} total, returning {len(paginated)} (page {page}), {query_time:.0f}ms")
+    log_success(f"Products: {total} total, returning {len(products)} (page {page}), {query_time:.0f}ms")
 
     return jsonify({
-        "products": paginated,
+        "products": products,
         "total": total,
         "page": page,
         "per_page": per_page,

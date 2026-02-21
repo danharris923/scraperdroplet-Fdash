@@ -158,6 +158,16 @@ class QueryBuilder:
         self._filters.append((col, "not.is", value))
         return self
 
+    def or_(self, conditions):
+        """
+        Add an OR filter using PostgREST syntax.
+        conditions: list of "col.op.value" strings, e.g.:
+            ["affiliate_url.ilike.*amazon*", "affiliate_url.ilike.*leons.ca*"]
+        Produces: ?or=(affiliate_url.ilike.*amazon*,affiliate_url.ilike.*leons.ca*)
+        """
+        self._filters.append(("or", "raw_or", conditions))
+        return self
+
     # -- Ordering and pagination --
 
     def order(self, col, desc=False):
@@ -207,6 +217,9 @@ class QueryBuilder:
                 params[col] = f"not.is.{value}"
             elif op == "ilike":
                 params[col] = f"ilike.{value}"
+            elif op == "raw_or":
+                # OR filter: or=(cond1,cond2,...)
+                params[col] = f"({','.join(value)})"
             else:
                 # eq, neq, gt, gte, lt, lte
                 params[col] = f"{op}.{value}"
