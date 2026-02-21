@@ -349,6 +349,11 @@ if not os.getenv("VERCEL"):
     def serve_js(filename):
         return send_from_directory(os.path.join(FRONTEND_DIR, "js"), filename)
 
+    @app.route("/images/<path:filename>")
+    def serve_images(filename):
+        """Serve image assets from frontend/images/."""
+        return send_from_directory(os.path.join(FRONTEND_DIR, "images"), filename)
+
 
 # ══════════════════════════════════════════════
 # API ENDPOINTS
