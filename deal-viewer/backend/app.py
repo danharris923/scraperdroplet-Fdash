@@ -75,12 +75,13 @@ def after_request_log(response):
 _BADGE_PREFIXES = re.compile(r"^\d+%\s*off", re.IGNORECASE)
 _BADGE_SUFFIXES = re.compile(
     r"(Limited[- ]time deal|Lightning Deal|Best Seller|Prime Early Access|Deal of the Day|"
-    r"Climate Pledge Friendly|Amazon'?s?\s*Choice|Sponsored|Top Deal|Overall Pick)$",
+    r"Climate Pledge Friendly|Amazon'?s?\s*Choice|Sponsored|Top Deal|Overall Pick|"
+    r"Ends in\d+:\d+:\d+)$",
     re.IGNORECASE,
 )
 _JUNK_TITLE = re.compile(
     r"^(\d+%\s*off)?\s*(Limited[- ]time deal|Lightning Deal|Deal of the Day|Top Deal|"
-    r"Best Seller|Sponsored|Overall Pick)\s*$",
+    r"Best Seller|Sponsored|Overall Pick|Ends in\d+:\d+:\d+)\s*$",
     re.IGNORECASE,
 )
 
@@ -98,6 +99,8 @@ def _clean_title(raw_title, row):
 
     # Strip badge prefix: "75% offSome Real Product" -> "Some Real Product"
     cleaned = _BADGE_PREFIXES.sub("", title).strip()
+    # Strip timer text: "Ends in01:37:10" anywhere
+    cleaned = re.sub(r"Ends in\d+:\d+:\d+", "", cleaned).strip()
     # Strip badge suffix: "Real Product Limited-time deal" -> "Real Product"
     cleaned = _BADGE_SUFFIXES.sub("", cleaned).strip()
 
@@ -108,32 +111,26 @@ def _clean_title(raw_title, row):
 
 
 def _fallback_title(row):
-    """Build a display title when the real title is missing or junk."""
-    parts = []
+    """Build a display title when the real title is missing or junk.
+    Amazon titles are almost always junk (badge text). Show 'Amazon Deal (ASIN)' so
+    users can identify the product from the image + ASIN."""
     brand = row.get("brand")
-    if brand and brand.strip():
-        parts.append(brand.strip())
-
-    # Try ASIN from retailer_sku or affiliate_url
-    sku = row.get("retailer_sku") or ""
     url = row.get("affiliate_url") or ""
-    asin_match = re.search(r"/dp/([A-Z0-9]{10})", url)
-    if asin_match:
-        parts.append(f"ASIN: {asin_match.group(1)}")
-    elif sku:
-        parts.append(f"SKU: {sku}")
+    asin = row.get("asin") or ""
 
-    if parts:
-        return " - ".join(parts)
+    # Try extracting ASIN from URL if not in dedicated field
+    if not asin:
+        m = re.search(r"/dp/([A-Z0-9]{10})", url)
+        if m:
+            asin = m.group(1)
 
-    # Last resort
-    try:
-        domain = urlparse(url).hostname or ""
-        domain = domain.replace("www.", "")
-        if domain:
-            return f"{domain} Deal"
-    except Exception:
-        pass
+    if asin:
+        prefix = brand if brand and brand.strip() else "Amazon Deal"
+        return f"{prefix} ({asin})"
+
+    if brand and brand.strip():
+        return brand.strip()
+
     return f"Deal #{row.get('id', '?')}"
 
 
