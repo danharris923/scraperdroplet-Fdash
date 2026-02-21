@@ -108,19 +108,8 @@ a { color: var(--accent); text-decoration: none; }
 .discount-epic   { background: rgba(168,85,247,0.15); color: var(--purple); }
 .discount-legend { background: rgba(234,179,8,0.15); color: var(--yellow); }
 
-/* ── Pagination ── */
-.pagination {
-  display: flex; justify-content: center; align-items: center; gap: 4px;
-  padding: 20px; flex-wrap: wrap;
-}
-.page-btn {
-  padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--bg4);
-  background: var(--bg2); color: var(--text2); font-size: 13px; cursor: pointer;
-}
-.page-btn:hover { border-color: var(--accent); color: var(--text); }
-.page-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
-.page-btn:disabled { opacity: 0.3; cursor: default; }
-.page-ellipsis { color: var(--text3); padding: 0 4px; }
+/* ── Load More Sentinel ── */
+#load-more { text-align: center; padding: 30px 20px; }
 
 /* ── Loading & Empty ── */
 .loading, .empty-state {
@@ -186,6 +175,18 @@ a { color: var(--accent); text-decoration: none; }
   border-radius: var(--radius); border: none; cursor: pointer; text-decoration: none;
 }
 .view-deal:hover { opacity: 0.9; }
+.modal-url-row { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+.copy-btn {
+  padding: 10px 18px; background: var(--bg4); color: var(--text); font-size: 13px;
+  border: 1px solid var(--bg4); border-radius: var(--radius); cursor: pointer; font-weight: 600;
+  transition: all 0.15s;
+}
+.copy-btn:hover { border-color: var(--accent); }
+.modal-url-display {
+  margin-top: 8px; padding: 8px 12px; background: var(--bg); border-radius: var(--radius);
+  font-size: 11px; color: var(--text3); font-family: monospace; word-break: break-all;
+  border: 1px solid var(--bg3);
+}
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
@@ -227,8 +228,8 @@ a { color: var(--accent); text-decoration: none; }
 <!-- Product grid -->
 <div class="grid" id="product-grid"></div>
 
-<!-- Pagination -->
-<div class="pagination" id="pagination"></div>
+<!-- Lazy load sentinel -->
+<div id="load-more" class="loading" style="display:none">Loading more...</div>
 
 <!-- Detail modal -->
 <div class="modal-overlay" id="modal-overlay">
@@ -246,10 +247,11 @@ const state = {
   minDiscount: 0,
   days: null,           // null = all time
   page: 1,
-  perPage: 24,
+  perPage: 99,
   totalProducts: 0,
   totalPages: 1,
   loading: false,
+  allLoaded: false,     // true when no more pages to fetch
 };
 
 // Debounce helper
@@ -356,9 +358,8 @@ function toggleSource(value) {
   } else {
     state.selectedSources.push(value);
   }
-  state.page = 1;
   updateStoreButtonStates();
-  loadProducts();
+  resetAndLoad();
 }
 
 function updateStoreButtonStates() {
@@ -372,31 +373,41 @@ function updateStoreButtonStates() {
 // ══════════════════════════════════════════════
 document.getElementById('search-input').addEventListener('input', debounce(e => {
   state.search = e.target.value.trim();
-  state.page = 1;
-  loadProducts();
+  resetAndLoad();
 }, 350));
 
 document.getElementById('discount-filter').addEventListener('change', e => {
   state.minDiscount = parseInt(e.target.value) || 0;
-  state.page = 1;
-  loadProducts();
+  resetAndLoad();
 });
 
 document.getElementById('date-filter').addEventListener('change', e => {
   state.days = e.target.value ? parseInt(e.target.value) : null;
-  state.page = 1;
-  loadProducts();
+  resetAndLoad();
 });
 
+// Reset state and reload from page 1
+function resetAndLoad() {
+  state.page = 1;
+  state.allLoaded = false;
+  loadProducts(true);
+}
+
 // ══════════════════════════════════════════════
-// LOAD PRODUCTS
+// LOAD PRODUCTS (with infinite scroll append)
 // ══════════════════════════════════════════════
-async function loadProducts() {
-  if (state.loading) return;
+async function loadProducts(reset = false) {
+  if (state.loading || (!reset && state.allLoaded)) return;
   state.loading = true;
 
   const grid = document.getElementById('product-grid');
-  grid.innerHTML = '<div class="loading">Loading deals...</div>';
+  const loader = document.getElementById('load-more');
+
+  if (reset) {
+    grid.innerHTML = '<div class="loading">Loading deals...</div>';
+  } else {
+    loader.style.display = 'block';
+  }
 
   try {
     const params = {
@@ -416,15 +427,32 @@ async function loadProducts() {
     state.totalPages = data.total_pages;
     state.page = data.page;
 
+    // Check if we've loaded everything
+    if (data.page >= data.total_pages || data.products.length === 0) {
+      state.allLoaded = true;
+    }
+
     renderStatusBar(data);
-    renderGrid(data.products);
-    renderPagination();
+
+    if (reset) {
+      grid.innerHTML = '';
+    }
+    appendCards(data.products);
   } catch (e) {
-    grid.innerHTML = '<div class="empty-state">Error loading products: ' + escapeHtml(e.message) + '</div>';
-    document.getElementById('pagination').innerHTML = '';
+    if (reset) {
+      grid.innerHTML = '<div class="empty-state">Error loading products: ' + escapeHtml(e.message) + '</div>';
+    }
   } finally {
     state.loading = false;
+    loader.style.display = 'none';
   }
+}
+
+// Load next page (called by IntersectionObserver)
+function loadMore() {
+  if (state.loading || state.allLoaded) return;
+  state.page++;
+  loadProducts(false);
 }
 
 // ══════════════════════════════════════════════
@@ -438,22 +466,20 @@ function renderStatusBar(data) {
         return store ? store.label : s;
       }).join(', ')
     : 'all stores';
-  const start = (data.page - 1) * data.per_page + 1;
-  const end = Math.min(start + data.products.length - 1, data.total);
-  bar.innerHTML = `Showing <span class="count">${start}-${end}</span> of <span class="count">${data.total.toLocaleString()}</span> deals from ${escapeHtml(sourceLabel)} <span class="time">(${data.query_time_ms}ms)</span>`;
+  const loaded = Math.min(data.page * data.per_page, data.total);
+  bar.innerHTML = `Showing <span class="count">${loaded.toLocaleString()}</span> of <span class="count">${data.total.toLocaleString()}</span> deals from ${escapeHtml(sourceLabel)} <span class="time">(${data.query_time_ms}ms)</span>`;
 }
 
 // ══════════════════════════════════════════════
-// PRODUCT GRID
+// PRODUCT GRID (append mode for infinite scroll)
 // ══════════════════════════════════════════════
-function renderGrid(products) {
+function appendCards(products) {
   const grid = document.getElementById('product-grid');
-  if (!products.length) {
+  if (!products.length && state.page === 1) {
     grid.innerHTML = '<div class="empty-state">No deals found matching your filters.</div>';
     return;
   }
 
-  grid.innerHTML = '';
   const frag = document.createDocumentFragment();
   for (const p of products) {
     const card = document.createElement('div');
@@ -494,46 +520,12 @@ function renderGrid(products) {
 }
 
 // ══════════════════════════════════════════════
-// PAGINATION
+// INFINITE SCROLL (IntersectionObserver)
 // ══════════════════════════════════════════════
-function renderPagination() {
-  const el = document.getElementById('pagination');
-  if (state.totalPages <= 1) { el.innerHTML = ''; return; }
-
-  const pages = [];
-  const current = state.page;
-  const total = state.totalPages;
-
-  // Always show first page
-  pages.push(1);
-  // Show pages around current
-  for (let i = Math.max(2, current - 2); i <= Math.min(total - 1, current + 2); i++) {
-    pages.push(i);
-  }
-  // Always show last page
-  if (total > 1) pages.push(total);
-
-  // Deduplicate and sort
-  const unique = [...new Set(pages)].sort((a, b) => a - b);
-
-  let html = `<button class="page-btn" ${current === 1 ? 'disabled' : ''} onclick="goToPage(${current - 1})">&lt;</button>`;
-  let prev = 0;
-  for (const p of unique) {
-    if (p - prev > 1) html += '<span class="page-ellipsis">...</span>';
-    html += `<button class="page-btn ${p === current ? 'active' : ''}" onclick="goToPage(${p})">${p}</button>`;
-    prev = p;
-  }
-  html += `<button class="page-btn" ${current === total ? 'disabled' : ''} onclick="goToPage(${current + 1})">&gt;</button>`;
-
-  el.innerHTML = html;
-}
-
-function goToPage(p) {
-  if (p < 1 || p > state.totalPages) return;
-  state.page = p;
-  loadProducts();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
+const scrollObserver = new IntersectionObserver(entries => {
+  if (entries[0].isIntersecting) loadMore();
+}, { rootMargin: '400px' });  // trigger 400px before reaching bottom
+scrollObserver.observe(document.getElementById('load-more'));
 
 // ══════════════════════════════════════════════
 // DETAIL MODAL
@@ -578,8 +570,22 @@ function renderModal(p) {
     ? `<span class="current">${formatPrice(p.current_price)}</span>${p.original_price && p.original_price > p.current_price ? `<span class="original">${formatPrice(p.original_price)}</span>` : ''}`
     : '';
 
+  // Savings in dollars
+  let savingsHtml = '';
+  if (p.current_price && p.original_price && p.original_price > p.current_price) {
+    const saved = (p.original_price - p.current_price).toFixed(2);
+    savingsHtml = `<div style="font-size:13px;color:var(--green);margin-bottom:12px;">You save $${saved}</div>`;
+  }
+
   const history = p.price_history || [];
   const chartHtml = history.length > 0 ? renderPriceChart(history) : '';
+
+  // Description if available
+  const descHtml = p.description ? `<div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5;">${escapeHtml(p.description)}</div>` : '';
+
+  // Affiliate URL with copy button
+  const urlStr = p.affiliate_url || '#';
+  const urlDisplay = urlStr.length > 70 ? urlStr.substring(0, 70) + '...' : urlStr;
 
   modalEl.innerHTML = `
     <button class="modal-close" onclick="closeModal()">&times;</button>
@@ -588,17 +594,40 @@ function renderModal(p) {
       <div class="modal-title">${escapeHtml(p.title || 'Untitled')}</div>
       <div class="modal-meta">
         <span class="modal-badge">${escapeHtml(p.store || '')}</span>
+        ${p.source ? `<span class="modal-badge">${escapeHtml(p.source)}</span>` : ''}
         ${p.category ? `<span class="modal-badge">${escapeHtml(p.category)}</span>` : ''}
         ${p.brand ? `<span class="modal-badge">${escapeHtml(p.brand)}</span>` : ''}
       </div>
       <div class="modal-price-row">${priceHtml}</div>
       ${discountBadge}
+      ${savingsHtml}
       <div class="modal-dates">
         First seen: <span>${formatDate(p.first_seen_at)}</span> &nbsp; Last seen: <span>${formatDate(p.last_seen_at)}</span>
+        &nbsp; ID: <span style="color:var(--text3)">${escapeHtml(p.id || '')}</span>
       </div>
+      ${descHtml}
       ${chartHtml}
-      <a class="view-deal" href="${escapeHtml(p.affiliate_url || '#')}" target="_blank" rel="noopener">View Deal &rarr;</a>
+      <div class="modal-url-row">
+        <a class="view-deal" href="${escapeHtml(urlStr)}" target="_blank" rel="noopener">View Deal &rarr;</a>
+        <button class="copy-btn" onclick="copyUrl(this, '${escapeHtml(urlStr.replace(/'/g, "\\'"))}')">Copy Link</button>
+      </div>
+      <div class="modal-url-display" title="${escapeHtml(urlStr)}">${escapeHtml(urlDisplay)}</div>
     </div>`;
+}
+
+function copyUrl(btn, url) {
+  navigator.clipboard.writeText(url).then(() => {
+    btn.textContent = 'Copied!';
+    btn.style.background = 'var(--green)';
+    setTimeout(() => { btn.textContent = 'Copy Link'; btn.style.background = ''; }, 1500);
+  }).catch(() => {
+    // Fallback for non-HTTPS
+    const ta = document.createElement('textarea');
+    ta.value = url; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy Link'; }, 1500);
+  });
 }
 
 // ══════════════════════════════════════════════

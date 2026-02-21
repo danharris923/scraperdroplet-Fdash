@@ -13,6 +13,7 @@ Endpoints:
 """
 
 import os
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
@@ -67,6 +68,74 @@ def after_request_log(response):
 # ══════════════════════════════════════════════
 # NORMALIZATION
 # ══════════════════════════════════════════════
+
+# ── Amazon title cleaning ──
+# The scraper often captures deal badge text as the title instead of the real product name.
+# Examples: "75% offLimited-time deal", "60% offLightning Deal", "Limited-time deal"
+_BADGE_PREFIXES = re.compile(r"^\d+%\s*off", re.IGNORECASE)
+_BADGE_SUFFIXES = re.compile(
+    r"(Limited[- ]time deal|Lightning Deal|Best Seller|Prime Early Access|Deal of the Day|"
+    r"Climate Pledge Friendly|Amazon'?s?\s*Choice|Sponsored|Top Deal|Overall Pick)$",
+    re.IGNORECASE,
+)
+_JUNK_TITLE = re.compile(
+    r"^(\d+%\s*off)?\s*(Limited[- ]time deal|Lightning Deal|Deal of the Day|Top Deal|"
+    r"Best Seller|Sponsored|Overall Pick)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _clean_title(raw_title, row):
+    """
+    Clean up Amazon deal badge text that the scraper captures as titles.
+    Strips "75% offLimited-time deal" prefixes/suffixes, falls back to brand/ASIN/URL.
+    """
+    title = (raw_title or "").strip()
+
+    # Entire title is badge text -- build a fallback
+    if not title or _JUNK_TITLE.match(title):
+        return _fallback_title(row)
+
+    # Strip badge prefix: "75% offSome Real Product" -> "Some Real Product"
+    cleaned = _BADGE_PREFIXES.sub("", title).strip()
+    # Strip badge suffix: "Real Product Limited-time deal" -> "Real Product"
+    cleaned = _BADGE_SUFFIXES.sub("", cleaned).strip()
+
+    if len(cleaned) < 3:
+        return _fallback_title(row)
+
+    return cleaned
+
+
+def _fallback_title(row):
+    """Build a display title when the real title is missing or junk."""
+    parts = []
+    brand = row.get("brand")
+    if brand and brand.strip():
+        parts.append(brand.strip())
+
+    # Try ASIN from retailer_sku or affiliate_url
+    sku = row.get("retailer_sku") or ""
+    url = row.get("affiliate_url") or ""
+    asin_match = re.search(r"/dp/([A-Z0-9]{10})", url)
+    if asin_match:
+        parts.append(f"ASIN: {asin_match.group(1)}")
+    elif sku:
+        parts.append(f"SKU: {sku}")
+
+    if parts:
+        return " - ".join(parts)
+
+    # Last resort
+    try:
+        domain = urlparse(url).hostname or ""
+        domain = domain.replace("www.", "")
+        if domain:
+            return f"{domain} Deal"
+    except Exception:
+        pass
+    return f"Deal #{row.get('id', '?')}"
+
 
 def _calc_discount(current, original, stored_discount):
     """Calculate discount percent -- use stored value, or compute from prices if missing."""
@@ -145,7 +214,7 @@ def normalize_retailer(row):
     orig = row.get("original_price")
     return {
         "id": f"retailer_{row['id']}",
-        "title": row.get("title") or "",
+        "title": _clean_title(row.get("title"), row),
         "brand": row.get("brand"),
         "store": store,
         "source": source,
