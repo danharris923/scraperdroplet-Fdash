@@ -311,6 +311,8 @@ SOURCE_LABELS = {
     "mastermind_toys": "Mastermind Toys",
     "reebok_ca": "Reebok Canada",
     "the_brick": "The Brick",
+    # Keepa — Amazon.ca price-tracked deals from the keepa_deals table
+    "keepa": "Keepa (Amazon.ca)",
     # Costco trackers
     "cocowest": "CocoWest (Canada)",
     "warehouse_runner": "WarehouseRunner (USA)",
